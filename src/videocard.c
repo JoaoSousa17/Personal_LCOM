@@ -15,7 +15,7 @@ int map_vram(uint16_t mode) {
   struct minix_mem_range mr;
   unsigned int vram_base;  /* VRAM's physical address */
   unsigned int vram_size;  /* VRAM's size */
-  int r;
+  // int r;
 
   /* Initialize vbe_mode_info_t struct */
   if (vbe_get_mode_info(mode, &vmi_p) != OK) {

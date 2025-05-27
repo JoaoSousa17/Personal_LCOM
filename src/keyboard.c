@@ -1,4 +1,5 @@
 #include "keyboard.h"
+#include "utils.c"
 
 #include <lcom/lcf.h>
 #include <minix/sysutil.h>

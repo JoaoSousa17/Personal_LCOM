@@ -4,7 +4,7 @@
 PROG=proj
 
 # source code files to be compiled
-SRCS = src/main.c src/videocard.c src/keyboard.c
+SRCS = main.c videocard.c keyboard.c
 
 # additional compilation flags
 # "-Wall -Wextra -Werror -I . -std=c11 -Wno-unused-parameter" are already set
