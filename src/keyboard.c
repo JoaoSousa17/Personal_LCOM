@@ -1,5 +1,5 @@
 #include "keyboard.h"
-#include "utils.c"
+#include "utils.h"
 
 #include <lcom/lcf.h>
 #include <minix/sysutil.h>
@@ -47,11 +47,12 @@ bool is_esc_key() {
   return (scancode == ESC_BREAK);
 }
 
+// No kbd_int_handler(), corrigir as verificações:
 int kbd_int_handler() {
   uint8_t status;
   
   /* Read status register */
-  if (util_sys_inb(KBC_ST_REG, &status) != OK) {
+  if (util_sys_inb(KBC_ST_REG, &status) != 0) { 
     printf("kbd_int_handler(): util_sys_inb() failed reading status\n");
     return 1;
   }
@@ -65,11 +66,12 @@ int kbd_int_handler() {
   /* Check if output buffer is full */
   if (status & KBC_OBF) {
     /* Read scancode from output buffer */
-    if (util_sys_inb(KBC_OUT_BUF, &scancode) != OK) {
+    if (util_sys_inb(KBC_OUT_BUF, &scancode) != 0) { 
       printf("kbd_int_handler(): util_sys_inb() failed reading scancode\n");
       return 1;
     }
   }
   
   return 0;
-} 
+}
+
