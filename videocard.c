@@ -1,6 +1,7 @@
 #include "videocard.h"
 #include "font.h"
 #include "leaderboard.h"
+#include "letter_rain.h"
 #include "game.h"
 #include <machine/int86.h>
 #include <lcom/vbe.h>

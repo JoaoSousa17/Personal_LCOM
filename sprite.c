@@ -13,7 +13,7 @@ Sprite *create_sprite(const char *pic[], int x, int y, int xspeed, int yspeed) {
         return NULL;
     
     // Read the sprite pixmap
-    sp->map = xpm_load(pic, XPM_INDEXED, &img);
+    sp->map = (char*)xpm_load(pic, XPM_INDEXED, &img);
     if (sp->map == NULL) {
         free(sp);
         return NULL;
@@ -51,11 +51,9 @@ int draw_sprite(Sprite *sp, char *base) {
     if (sp == NULL || sp->map == NULL)
         return 1;
     
-    // Get video memory and screen dimensions
-    void *video_mem = get_video_mem();
+    // Get screen dimensions
     uint16_t h_res = get_h_res();
     uint16_t v_res = get_v_res();
-    uint8_t bytes_per_pixel = (get_bits_per_pixel() + 7) / 8;
     
     // Draw sprite pixel by pixel
     for (int row = 0; row < sp->height; row++) {
@@ -65,7 +63,7 @@ int draw_sprite(Sprite *sp, char *base) {
             
             // Check bounds
             if (screen_x >= 0 && screen_x < h_res && screen_y >= 0 && screen_y < v_res) {
-                uint8_t pixel_color = sp->map[row * sp->width + col];
+                uint8_t pixel_color = (uint8_t)sp->map[row * sp->width + col];
                 
                 // Don't draw transparent pixels (assuming 0 is transparent)
                 if (pixel_color != 0) {

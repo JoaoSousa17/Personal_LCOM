@@ -20,11 +20,12 @@ typedef enum {
 /* Game structure */
 typedef struct {
   char nome[MAX_INITIALS];     /* Player initials (3 chars + null terminator) */
-  char letra;                  /* Current letter (not used yet) */
+  char letra;                  /* Current letter from letter rain */
   int pontuacao;              /* Current score */
   single_player_state_t state; /* Current game state */
   uint8_t countdown;          /* Countdown timer (3, 2, 1) */
   uint32_t timer_counter;     /* Timer counter for countdown */
+  letter_rain_t letter_rain_game; /* Letter rain mini-game */
 } jogo_t;
 
 /**
@@ -113,5 +114,45 @@ int handle_initials_click(uint16_t x, uint16_t y, bool left_click);
  * @return 0 on success, 1 if enter was pressed (confirm), -1 if no action
  */
 int handle_initials_keyboard(uint8_t scancode);
+
+/**
+ * @brief Start the letter rain mini-game
+ * 
+ * @param game Pointer to game structure
+ * @return 0 on success, non-zero otherwise
+ */
+int game_start_letter_rain(jogo_t *game);
+
+/**
+ * @brief Update letter rain mini-game
+ * 
+ * @param game Pointer to game structure
+ * @return 0 if continuing, 1 if finished
+ */
+int game_update_letter_rain(jogo_t *game);
+
+/**
+ * @brief Draw letter rain mini-game
+ * 
+ * @param game Pointer to game structure
+ * @return 0 on success, non-zero otherwise
+ */
+int game_draw_letter_rain(jogo_t *game);
+
+/**
+ * @brief Handle keyboard input for letter rain
+ * 
+ * @param game Pointer to game structure
+ * @param scancode Keyboard scancode
+ * @return 0 on success, non-zero otherwise
+ */
+int game_handle_letter_rain_input(jogo_t *game, uint8_t scancode);
+
+/**
+ * @brief Cleanup letter rain resources
+ * 
+ * @param game Pointer to game structure
+ */
+void game_cleanup_letter_rain(jogo_t *game);
 
 #endif /* _GAME_H_ */
