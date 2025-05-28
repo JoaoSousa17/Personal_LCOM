@@ -150,6 +150,25 @@ int draw_leaderboard_with_hover(uint16_t mouse_x, uint16_t mouse_y);
 int draw_instructions();
 
 /**
+ * @brief Draw instructions screen with mouse support
+ * 
+ * @param mouse_x Current mouse X position
+ * @param mouse_y Current mouse Y position
+ * @return 0 on success, non-zero otherwise
+ */
+int draw_instructions_with_mouse(uint16_t mouse_x, uint16_t mouse_y);
+
+/**
+ * @brief Handle mouse clicks on instructions screen
+ * 
+ * @param x Mouse x coordinate
+ * @param y Mouse y coordinate
+ * @param left_click True if left button was clicked
+ * @return 1 if back button was clicked, -1 if no action
+ */
+int handle_instructions_click(uint16_t x, uint16_t y, bool left_click);
+
+/**
  * @brief Initialize single player game
  * 
  * @return 0 on success, non-zero otherwise

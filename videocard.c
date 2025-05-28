@@ -514,7 +514,7 @@ int draw_current_page(uint16_t mouse_x, uint16_t mouse_y) {
     case STATE_LEADERBOARD:
       return draw_leaderboard_with_hover(mouse_x, mouse_y);
     case STATE_INSTRUCTIONS:
-      return draw_instructions();
+      return draw_instructions_with_mouse(mouse_x, mouse_y);
     default:
       return draw_main_page_with_hover(mouse_x, mouse_y);
   }
@@ -522,28 +522,149 @@ int draw_current_page(uint16_t mouse_x, uint16_t mouse_y) {
 
 int draw_instructions() {
   /* Define colors */
-  uint32_t bg_color = 0x1a1a2e;
-  uint32_t orange = 0xff6b35;
-  uint32_t white = 0xffffff;
+  uint32_t bg_color = 0x1a1a2e;      /* Dark blue background */
+  uint32_t orange = 0xff6b35;        /* Orange for title */
+  uint32_t white = 0xffffff;         /* White for text */
+  uint32_t light_blue = 0x16537e;    /* Light blue for accent */
+  uint32_t yellow = 0xffd700;        /* Yellow for highlights */
+  uint32_t green = 0x00ff88;         /* Green for positive info */
   
-  /* Clear screen */
+  /* Clear screen with dark background */
   if (clear_screen(bg_color) != 0) return 1;
   
   /* Draw title */
-  const char *title = "INSTRUCTIONS";
-  uint16_t title_x = (h_res - strlen(title) * 8 * 3) / 2;
-  if (draw_string_scaled(title_x, 50, title, orange, 3) != 0) return 1;
+  const char *title = "REGRAS DO JOGO";
+  uint8_t title_scale = 3;
+  uint16_t title_width = strlen(title) * 8 * title_scale;
+  uint16_t title_x = (get_h_res() - title_width) / 2;
+  uint16_t title_y = 30;
   
-  /* Draw instructions */
-  if (draw_string_scaled(100, 150, "How to play:", white, 2) != 0) return 1;
-  if (draw_string_scaled(100, 180, "- Use arrow keys to move", white, 1) != 0) return 1;
-  if (draw_string_scaled(100, 200, "- Press SPACE to attack", white, 1) != 0) return 1;
-  if (draw_string_scaled(100, 220, "- Defeat your opponent!", white, 1) != 0) return 1;
+  if (draw_string_scaled(title_x, title_y, title, orange, title_scale) != 0) return 1;
   
-  /* Draw back instruction */
-  if (draw_string_scaled(100, 400, "Press ESC to go back", white, 1) != 0) return 1;
+  /* Draw decorative line under title */
+  uint16_t line_width = title_width + 40;
+  uint16_t line_x = (get_h_res() - line_width) / 2;
+  uint16_t line_y = title_y + title_scale * 8 + 10;
+  
+  for (uint16_t i = 0; i < line_width; i++) {
+    for (uint8_t thickness = 0; thickness < 3; thickness++) {
+      if (draw_pixel(line_x + i, line_y + thickness, light_blue) != 0) return 1;
+    }
+  }
+  
+  /* Draw decorative border around the rules */
+  uint16_t border_x = 60;
+  uint16_t border_y = line_y + 20;
+  uint16_t border_width = get_h_res() - 120;
+  uint16_t border_height = 360;
+  
+  if (draw_rectangle_border(border_x, border_y, border_width, border_height, light_blue, 2) != 0) return 1;
+  
+  /* Draw game rules - smaller text to fit better */
+  uint16_t start_y = border_y + 20;
+  uint16_t line_spacing = 20;
+  uint16_t text_x = border_x + 20;
+  
+  /* Rule 1 */
+  if (draw_string_scaled(text_x, start_y, "1. O jogo escolhe uma categoria aleatoria", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 15, "(Exemplo: Animais, Paises, Profissoes...)", yellow, 1) != 0) return 1;
+  
+  /* Rule 2 */
+  start_y += line_spacing + 25;
+  if (draw_string_scaled(text_x, start_y, "2. Tens 35 segundos para escrever palavras", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 15, "dessa categoria", white, 1) != 0) return 1;
+  
+  /* Rule 3 */
+  start_y += line_spacing + 25;
+  if (draw_string_scaled(text_x, start_y, "3. Pontuacao por palavra:", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 15, "- Palavras curtas (3-5 letras): 1 ponto", green, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 28, "- Palavras medias (6-8 letras): 2 pontos", green, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 41, "- Palavras longas (9+ letras): 3 pontos", green, 1) != 0) return 1;
+  
+  /* Rule 4 */
+  start_y += line_spacing + 55;
+  if (draw_string_scaled(text_x, start_y, "4. O jogo termina quando:", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 15, "- Acertas todas as palavras possiveis", yellow, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 28, "- OU quando o tempo acaba", yellow, 1) != 0) return 1;
+  
+  /* Controls section */
+  start_y += line_spacing + 40;
+  if (draw_string_scaled(text_x, start_y, "CONTROLOS:", orange, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 18, "- Use o teclado para escrever palavras", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 31, "- Press ENTER para submeter palavra", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 44, "- Press ESC para voltar ao menu", white, 1) != 0) return 1;
+  
+  /* Add decorative corners like in main menu */
+  uint16_t corner_size = 30;
+  
+  /* Top-left corner */
+  if (draw_rectangle_border(20, 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
+  
+  /* Top-right corner */
+  if (draw_rectangle_border(get_h_res() - corner_size - 20, 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
+  
+  /* Bottom-left corner */
+  if (draw_rectangle_border(20, get_v_res() - corner_size - 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
+  
+  /* Bottom-right corner */
+  if (draw_rectangle_border(get_h_res() - corner_size - 20, get_v_res() - corner_size - 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
   
   return 0;
+}
+
+int draw_instructions_with_mouse(uint16_t mouse_x, uint16_t mouse_y) {
+  /* Draw the instructions content first */
+  if (draw_instructions() != 0) return 1;
+  
+  /* Draw back arrow button in top-left */
+  uint16_t arrow_x = 30;
+  uint16_t arrow_y = 30;
+  uint16_t arrow_width = 80;
+  uint16_t arrow_height = 30;
+  
+  /* Check if mouse is hovering over back button */
+  bool back_hovered = (mouse_x >= arrow_x && mouse_x <= arrow_x + arrow_width &&
+                      mouse_y >= arrow_y && mouse_y <= arrow_y + arrow_height);
+  
+  /* Draw back button */
+  uint32_t button_color = back_hovered ? 0xffa500 : 0xffd700; /* Orange when hovered, yellow otherwise */
+  uint32_t bg_color = back_hovered ? 0x2a2a4e : 0x1a1a2e;
+  
+  /* Draw button background */
+  if (draw_filled_rectangle(arrow_x, arrow_y, arrow_width, arrow_height, bg_color) != 0) return 1;
+  
+  /* Draw button border */
+  if (draw_rectangle_border(arrow_x, arrow_y, arrow_width, arrow_height, button_color, 2) != 0) return 1;
+  
+  /* Draw back arrow and text */
+  const char *back_text = "<- BACK";
+  uint16_t text_x = arrow_x + 8;
+  uint16_t text_y = arrow_y + 8;
+  uint32_t text_color = back_hovered ? 0xffffff : 0xffd700;
+  
+  if (draw_string_scaled(text_x, text_y, back_text, text_color, 1) != 0) return 1;
+  
+  /* Draw mouse cursor */
+  if (draw_mouse_cursor(mouse_x, mouse_y, 0xffffff) != 0) return 1;
+  
+  return 0;
+}
+
+int handle_instructions_click(uint16_t x, uint16_t y, bool left_click) {
+  if (!left_click) return -1;  /* Only handle left clicks */
+  
+  /* Check back button */
+  uint16_t arrow_x = 30;
+  uint16_t arrow_y = 30;
+  uint16_t arrow_width = 80;
+  uint16_t arrow_height = 30;
+  
+  if (x >= arrow_x && x <= arrow_x + arrow_width &&
+      y >= arrow_y && y <= arrow_y + arrow_height) {
+    return 1; /* Back button clicked */
+  }
+  
+  return -1; /* No action */
 }
 
 int draw_init_sp_game() {

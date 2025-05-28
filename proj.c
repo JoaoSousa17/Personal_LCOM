@@ -191,6 +191,15 @@ int (proj_main_loop)(int argc, char* argv[])
                       printf("Error drawing main menu\n");
                     }
                   }
+                } else if (get_game_state() == STATE_INSTRUCTIONS) {
+                  int click_result = handle_instructions_click(mouse_x, mouse_y, true);
+                  if (click_result == 1) { // Back button was clicked
+                    printf("Back button clicked, returning to main menu...\n");
+                    set_game_state(STATE_MAIN_MENU);
+                    if (draw_current_page(mouse_x, mouse_y) != 0) {
+                      printf("Error drawing main menu\n");
+                    }
+                  }
                 }
               }
             }
