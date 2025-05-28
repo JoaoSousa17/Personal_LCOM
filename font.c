@@ -197,40 +197,83 @@ static const uint8_t font_8x8[95][8] = {
   {0x6E, 0x3B, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 };
 
-/* External video memory pointer - must be set by videocard module */
-extern void *video_mem;
-
 void font_init() {
   /* Nothing to initialize for this simple font system */
 }
 
-int draw_pixel(uint16_t x, uint16_t y, uint32_t color) {
-  if (x >= get_h_res() || y >= get_v_res()) {
-    return 1; /* Out of bounds */
+int draw_char_scaled(uint16_t x, uint16_t y, char ch, uint32_t color, uint8_t scale) {
+  /* Check if character is printable */
+  if (ch < 32 || ch > 126) {
+    ch = '?'; /* Replace unprintable chars with '?' */
   }
   
-  uint8_t bytes_per_pixel = (get_bits_per_pixel() + 7) / 8;
-  uint8_t *pixel_ptr = (uint8_t *)video_mem + (y * get_h_res() + x) * bytes_per_pixel;
+  if (scale == 0) scale = 1; /* Avoid division by zero */
   
-  /* Write color based on bits per pixel */
-  switch (get_bits_per_pixel()) {
-    case 8:
-      *pixel_ptr = (uint8_t)color;
-      break;
-    case 15:
-    case 16:
-      *(uint16_t *)pixel_ptr = (uint16_t)color;
-      break;
-    case 24:
-      pixel_ptr[0] = (uint8_t)(color & 0xFF);       /* Blue */
-      pixel_ptr[1] = (uint8_t)((color >> 8) & 0xFF);  /* Green */
-      pixel_ptr[2] = (uint8_t)((color >> 16) & 0xFF); /* Red */
-      break;
-    case 32:
-      *(uint32_t *)pixel_ptr = color;
-      break;
-    default:
-      return 1; /* Unsupported color depth */
+  /* Get font data for the character */
+  const uint8_t *char_data = font_8x8[ch - 32];
+  
+  /* Draw each row of the character */
+  for (int row = 0; row < 8; row++) {
+    uint8_t byte = char_data[row];
+    
+    /* Draw each pixel in the row */
+    for (int col = 0; col < 8; col++) {
+      if (byte & (0x01 << col)) { /* Check if bit is set (LSB first) */
+        /* Draw scaled pixel (scale x scale square) */
+        for (int sy = 0; sy < scale; sy++) {
+          for (int sx = 0; sx < scale; sx++) {
+            if (draw_pixel(x + col * scale + sx, y + row * scale + sy, color) != 0) {
+              return 1; /* Failed to draw pixel */
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  return 0;
+}
+
+int draw_string_scaled(uint16_t x, uint16_t y, const char *str, uint32_t color, uint8_t scale) {
+  if (str == NULL) {
+    return 1;
+  }
+  
+  if (scale == 0) scale = 1; /* Avoid division by zero */
+  
+  uint16_t current_x = x;
+  uint16_t char_width = 8 * scale;
+  uint16_t char_height = 8 * scale;
+  
+  /* Draw each character in the string */
+  while (*str != '\0') {
+    if (*str == '\n') {
+      /* Handle newline */
+      current_x = x;
+      y += char_height; /* Move to next line */
+    } else if (*str == '\t') {
+      /* Handle tab - move to next 4-character boundary */
+      current_x = ((current_x - x) / (char_width * 4) + 1) * (char_width * 4) + x;
+    } else {
+      /* Draw regular character */
+      if (draw_char_scaled(current_x, y, *str, color, scale) != 0) {
+        return 1; /* Failed to draw character */
+      }
+      current_x += char_width; /* Move to next character position */
+    }
+    
+    /* Check if we need to wrap to next line */
+    if (current_x + char_width > get_h_res()) {
+      current_x = x;
+      y += char_height;
+    }
+    
+    /* Check if we're past the bottom of the screen */
+    if (y + char_height > get_v_res()) {
+      break; /* Stop drawing if we're off screen */
+    }
+    
+    str++;
   }
   
   return 0;
@@ -251,7 +294,7 @@ int draw_char(uint16_t x, uint16_t y, char ch, uint32_t color) {
     
     /* Draw each pixel in the row */
     for (int col = 0; col < 8; col++) {
-      if (byte & (0x80 >> col)) { /* Check if bit is set (MSB first) */
+      if (byte & (0x01 << col)) { /* Check if bit is set (LSB first) */
         if (draw_pixel(x + col, y + row, color) != 0) {
           return 1; /* Failed to draw pixel */
         }
@@ -298,21 +341,6 @@ int draw_string(uint16_t x, uint16_t y, const char *str, uint32_t color) {
     }
     
     str++;
-  }
-  
-  return 0;
-}
-
-int clear_screen(uint32_t color) {
-  uint16_t h_res = get_h_res();
-  uint16_t v_res = get_v_res();
-  
-  for (uint16_t y = 0; y < v_res; y++) {
-    for (uint16_t x = 0; x < h_res; x++) {
-      if (draw_pixel(x, y, color) != 0) {
-        return 1;
-      }
-    }
   }
   
   return 0;

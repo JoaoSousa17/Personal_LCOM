@@ -3,9 +3,19 @@
 #include <stdio.h>
 #include "videocard.h"
 #include "keyboard.h"
+#include "mouse.h"
+#include "font.h"
 
 uint16_t mode;
 uint8_t kbd_bit_no = 0;
+uint8_t mouse_bit_no = 0;
+
+// Define some colors for different bit depths
+#define COLOR_WHITE 0xFFFFFF
+#define COLOR_RED   0xFF0000
+#define COLOR_GREEN 0x00FF00
+#define COLOR_BLUE  0x0000FF
+#define COLOR_BLACK 0x000000
 
 int main(int argc, char *argv[])
 {
@@ -72,6 +82,26 @@ int (proj_main_loop)(int argc, char* argv[])
     return 1;
   }
   
+  /* Subscribe mouse interrupts */
+  if (mouse_enable(&mouse_bit_no) != 0) {
+    printf("Error subscribing mouse interrupts\n");
+    kbd_unsubscribe_int();
+    exit_graphics_mode();
+    return 1;
+  }
+  
+  /* Initialize font system */
+  font_init();
+  
+  /* Set initial state and draw the main page */
+  set_game_state(STATE_MAIN_MENU);
+  if (draw_current_page(400, 300) != 0) {
+    printf("Error drawing initial page\n");
+    exit_graphics_mode();
+    kbd_unsubscribe_int();
+    return 1;
+  }
+  
   int ipc_status;
   message msg;
   bool running = true;
@@ -96,8 +126,60 @@ int (proj_main_loop)(int argc, char* argv[])
             
             /* Check if ESC key was pressed */
             if (is_esc_key()) {
-              printf("ESC key detected, exiting graphics mode...\n");
-              running = false;
+              if (get_game_state() != STATE_MAIN_MENU) {
+                /* Go back to main menu */
+                printf("Going back to main menu...\n");
+                set_game_state(STATE_MAIN_MENU);
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                if (draw_current_page(mouse_x, mouse_y) != 0) {
+                  printf("Error drawing main menu\n");
+                }
+              } else {
+                /* Exit application */
+                printf("ESC key detected, exiting graphics mode...\n");
+                running = false;
+              }
+            }
+          }
+          
+          if (msg.m_notify.interrupts & BIT(mouse_bit_no)) {
+            /* Handle mouse interrupt */
+            mouse_ih_custom();
+            
+            /* Check if mouse packet is ready */
+            if (mouse_has_packet_ready()) {
+              struct packet pp = mouse_get_packet();
+              mouse_clear_packet_ready();
+              
+              /* Redraw page if needed (mouse moved or state changed) */
+              if (mouse_menu_needs_redraw() || mouse_should_redraw_page()) {
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                
+                if (draw_current_page(mouse_x, mouse_y) != 0) {
+                  printf("Error redrawing page\n");
+                }
+                mouse_clear_redraw_flag();
+                mouse_clear_page_redraw_flag();
+              }
+              
+              /* Handle left click only in main menu */
+              if (pp.lb && get_game_state() == STATE_MAIN_MENU) {
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                
+                int click_result = handle_menu_click(mouse_x, mouse_y, true);
+                if (click_result == 1) { // Quit was clicked
+                  printf("Quit selected, exiting graphics mode...\n");
+                  running = false;
+                } else if (click_result == 0) {
+                  /* State changed, redraw page */
+                  if (draw_current_page(mouse_x, mouse_y) != 0) {
+                    printf("Error drawing new page\n");
+                  }
+                }
+              }
             }
           }
           break;
@@ -105,6 +187,11 @@ int (proj_main_loop)(int argc, char* argv[])
           break;
       }
     }
+  }
+  
+  /* Unsubscribe mouse interrupts */
+  if (mouse_disable() != 0) {
+    printf("Error unsubscribing mouse interrupts\n");
   }
   
   /* Unsubscribe keyboard interrupts */
@@ -122,4 +209,3 @@ int (proj_main_loop)(int argc, char* argv[])
   
   return 0;
 }
-

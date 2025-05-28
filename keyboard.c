@@ -23,14 +23,6 @@ static int hook_id = KBD_IRQ;
 static uint8_t scancode = 0;
 static bool esc_pressed = false;
 
-// Custom implementation of util_sys_inb
-int util_sys_inb(int port, uint8_t *value) {
-  uint32_t val32;
-  int status = sys_inb(port, &val32);
-  *value = (uint8_t) val32;
-  return status;
-}
-
 int kbd_subscribe_int(uint8_t *bit_no) {
   *bit_no = hook_id;
   if (sys_irqsetpolicy(KBD_IRQ, IRQ_REENABLE | IRQ_EXCLUSIVE, &hook_id) != OK) {
