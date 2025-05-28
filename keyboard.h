@@ -42,4 +42,4 @@ int kbd_unsubscribe_int();
  */
 int kbd_int_handler();
 
-#endif /* _KEYBOARD_H_ */ 
+#endif /* _KEYBOARD_H_ */

@@ -1,0 +1,156 @@
+@lcflib.a:2019, lcf_start
+  proj_main_loop(argc, argv)
+> proj_main_loop(0, [NULL])
+  @videocard.c:72, set_graphics_mode
+    sys_int86(&reg86)
+  > sys_int86(addr: 0xeffff6f0 [AX: 4f02, BX: 4115, CX: 0000, DX: 0000, ES: 0000, DI: 0000])
+  < sys_int86(addr: 0xeffff6f0 [AX: 004f, BX: 4115, CX: 0000, DX: 0000, ES: 0000, DI: 0000]) -> (ret: 0)
+  @videocard.c:20, map_vram
+    vbe_get_mode_info(mode, &vmi_p)
+  > vbe_get_mode_info(0x115, addr: 0x822e07c)
+  < vbe_get_mode_info(0x115, addr: 0x822e07c [0xe0000000, 800x600, 8:8:8 (24) <1.37329 MiB>]) -> (ret: 0)
+  @videocard.c:47, map_vram
+    sys_privctl(SELF, SYS_PRIV_ADD_MEM, &mr)
+  > sys_privctl(SELF, SYS_PRIV_ADD_MEM, addr: 0xeffff710 [0xe0000000 - 0xe015f900 <1.37329 MiB>])
+  < sys_privctl(SELF, SYS_PRIV_ADD_MEM, &mr) -> (ret: 0)
+  @videocard.c:53, map_vram
+    vm_map_phys(SELF, (void *)mr.mr_base, vram_size)
+  < vm_map_phys(SELF, addr: 0xe0000000, 1.37329 MiB) -> (ret: 0xef89b000)
+  @proj.c:65, proj_main_loop
+    printf("Graphics mode 0x%X initialized successfully\n", mode)
+    "Graphics mode 0x115 initialized successfully"
+  @proj.c:66, proj_main_loop
+    printf("Resolution: %dx%d, %d bits per pixel\n", get_h_res(), get_v_res(), get_bits_per_pixel())
+    "Resolution: 800x600, 24 bits per pixel"
+  @keyboard.c:36, kbd_subscribe_int
+    sys_irqsetpolicy(KBD_IRQ, IRQ_REENABLE | IRQ_EXCLUSIVE, &hook_id)
+  > sys_irqsetpolicy(1, 3, addr: 0x822d3fc [1])
+  < sys_irqsetpolicy(1, 3, addr: 0x822d3fc [10]) -> (ret: 0)
+  @proj.c:80, proj_main_loop
+    printf("Press ESC to exit graphics mode\n")
+    "Press ESC to exit graphics mode"
+  @proj.c:84, proj_main_loop
+    driver_receive(ANY, &msg, &ipc_status)
+  > driver_receive(ANY, addr: 0xeffff750, addr: 0xeffff798)
+  < driver_receive(<[HARDWARE: 0b0000000000000000000000000000000000000000000000000000000000000010]>)
+  @keyboard.c:29, util_sys_inb
+    sys_inb(port, &val32)
+  > sys_inb(0x64, addr: 0xeffff71c)
+  < sys_inb(0x64, addr: 0xeffff71c [0x1d = 0b00011101])
+  @keyboard.c:29, util_sys_inb
+    sys_inb(port, &val32)
+  > sys_inb(0x60, addr: 0xeffff720)
+  < sys_inb(0x60, addr: 0xeffff720 [0x9c = 0b10011100])
+  @keyboard.c:91, kbd_int_handler
+    printf("Scancode: 0x%02X\n", scancode)
+    "Scancode: 0x9C"
+  @proj.c:84, proj_main_loop
+    driver_receive(ANY, &msg, &ipc_status)
+  > driver_receive(ANY, addr: 0xeffff750, addr: 0xeffff798)
+  < driver_receive(<[HARDWARE: 0b0000000000000000000000000000000000000000000000000000000000000010]>)
+  @keyboard.c:29, util_sys_inb
+    sys_inb(port, &val32)
+  > sys_inb(0x64, addr: 0xeffff71c)
+  < sys_inb(0x64, addr: 0xeffff71c [0x1d = 0b00011101])
+  @keyboard.c:29, util_sys_inb
+    sys_inb(port, &val32)
+  > sys_inb(0x60, addr: 0xeffff720)
+  < sys_inb(0x60, addr: 0xeffff720 [0x01 = 0b00000001])
+  @keyboard.c:91, kbd_int_handler
+    printf("Scancode: 0x%02X\n", scancode)
+    "Scancode: 0x01"
+  @proj.c:99, proj_main_loop
+    printf("ESC key detected, exiting graphics mode...\n")
+    "ESC key detected, exiting graphics mode..."
+  @keyboard.c:44, kbd_unsubscribe_int
+    sys_irqrmpolicy(&hook_id)
+  > sys_irqrmpolicy(addr: 0x822d3fc [10])
+  < sys_irqrmpolicy(addr: 0x822d3fc [10]) -> (ret: 0)
+  @videocard.c:88, exit_graphics_mode
+    sys_int86(&reg86)
+  > sys_int86(addr: 0xeffff6f0 [AX: 0003, BX: 0000, CX: 0000, DX: 0000, ES: 0000, DI: 0000])
+  < sys_int86(addr: 0xeffff6f0 [AX: 0030, BX: 0000, CX: 0000, DX: 0000, ES: 0000, DI: 0000]) -> (ret: 0)
+  @videocard.c:96, exit_graphics_mode
+    vm_unmap_phys(SELF, video_mem, vram_size)
+  @proj.c:121, proj_main_loop
+    printf("Graphics mode exited successfully\n")
+    "Graphics mode exited successfully"
+< proj_main_loop(0, [NULL]) -> (ret: 0)
+@proj.c:29, main
+  proj_main_loop(argc, argv)
+> proj_main_loop(2, ["/home/lcom/labs/grupo_2leic10_2/proj/src/proj", "/dev/console", NULL])
+  @videocard.c:72, set_graphics_mode
+    sys_int86(&reg86)
+  > sys_int86(addr: 0xeffff930 [AX: 4f02, BX: 4115, CX: 0000, DX: 0000, ES: 0000, DI: 0000])
+  < sys_int86(addr: 0xeffff930 [AX: 004f, BX: 4115, CX: 0000, DX: 0000, ES: 0000, DI: 0000]) -> (ret: 0)
+  @videocard.c:20, map_vram
+    vbe_get_mode_info(mode, &vmi_p)
+  > vbe_get_mode_info(0x115, addr: 0x822e07c)
+  < vbe_get_mode_info(0x115, addr: 0x822e07c [0xe0000000, 800x600, 8:8:8 (24) <1.37329 MiB>]) -> (ret: 0)
+  @videocard.c:47, map_vram
+    sys_privctl(SELF, SYS_PRIV_ADD_MEM, &mr)
+  > sys_privctl(SELF, SYS_PRIV_ADD_MEM, addr: 0xeffff950 [0xe0000000 - 0xe015f900 <1.37329 MiB>])
+  < sys_privctl(SELF, SYS_PRIV_ADD_MEM, &mr) -> (ret: 0)
+  @videocard.c:53, map_vram
+    vm_map_phys(SELF, (void *)mr.mr_base, vram_size)
+  < vm_map_phys(SELF, addr: 0xe0000000, 1.37329 MiB) -> (ret: 0xef89b000)
+  @proj.c:65, proj_main_loop
+    printf("Graphics mode 0x%X initialized successfully\n", mode)
+    "Graphics mode 0x115 initialized successfully"
+  @proj.c:66, proj_main_loop
+    printf("Resolution: %dx%d, %d bits per pixel\n", get_h_res(), get_v_res(), get_bits_per_pixel())
+    "Resolution: 800x600, 24 bits per pixel"
+  @keyboard.c:36, kbd_subscribe_int
+    sys_irqsetpolicy(KBD_IRQ, IRQ_REENABLE | IRQ_EXCLUSIVE, &hook_id)
+  > sys_irqsetpolicy(1, 3, addr: 0x822d3fc [10])
+  < sys_irqsetpolicy(1, 3, addr: 0x822d3fc [10]) -> (ret: 0)
+  @proj.c:80, proj_main_loop
+    printf("Press ESC to exit graphics mode\n")
+    "Press ESC to exit graphics mode"
+  @proj.c:84, proj_main_loop
+    driver_receive(ANY, &msg, &ipc_status)
+  > driver_receive(ANY, addr: 0xeffff990, addr: 0xeffff9d8)
+  < driver_receive(<[HARDWARE: 0b0000000000000000000000000000000000000000000000000000010000000000]>)
+  @keyboard.c:29, util_sys_inb
+    sys_inb(port, &val32)
+  > sys_inb(0x64, addr: 0xeffff95c)
+  < sys_inb(0x64, addr: 0xeffff95c [0x1d = 0b00011101])
+  @keyboard.c:29, util_sys_inb
+    sys_inb(port, &val32)
+  > sys_inb(0x60, addr: 0xeffff960)
+  < sys_inb(0x60, addr: 0xeffff960 [0x81 = 0b10000001])
+  @keyboard.c:91, kbd_int_handler
+    printf("Scancode: 0x%02X\n", scancode)
+    "Scancode: 0x81"
+  @proj.c:84, proj_main_loop
+    driver_receive(ANY, &msg, &ipc_status)
+  > driver_receive(ANY, addr: 0xeffff990, addr: 0xeffff9d8)
+  < driver_receive(<[HARDWARE: 0b0000000000000000000000000000000000000000000000000000010000000000]>)
+  @keyboard.c:29, util_sys_inb
+    sys_inb(port, &val32)
+  > sys_inb(0x64, addr: 0xeffff95c)
+  < sys_inb(0x64, addr: 0xeffff95c [0x1d = 0b00011101])
+  @keyboard.c:29, util_sys_inb
+    sys_inb(port, &val32)
+  > sys_inb(0x60, addr: 0xeffff960)
+  < sys_inb(0x60, addr: 0xeffff960 [0x01 = 0b00000001])
+  @keyboard.c:91, kbd_int_handler
+    printf("Scancode: 0x%02X\n", scancode)
+    "Scancode: 0x01"
+  @proj.c:99, proj_main_loop
+    printf("ESC key detected, exiting graphics mode...\n")
+    "ESC key detected, exiting graphics mode..."
+  @keyboard.c:44, kbd_unsubscribe_int
+    sys_irqrmpolicy(&hook_id)
+  > sys_irqrmpolicy(addr: 0x822d3fc [10])
+  < sys_irqrmpolicy(addr: 0x822d3fc [10]) -> (ret: 0)
+  @videocard.c:88, exit_graphics_mode
+    sys_int86(&reg86)
+  > sys_int86(addr: 0xeffff930 [AX: 0003, BX: 0000, CX: 0000, DX: 0000, ES: 0000, DI: 0000])
+  < sys_int86(addr: 0xeffff930 [AX: 0030, BX: 0000, CX: 0000, DX: 0000, ES: 0000, DI: 0000]) -> (ret: 0)
+  @videocard.c:96, exit_graphics_mode
+    vm_unmap_phys(SELF, video_mem, vram_size)
+  @proj.c:121, proj_main_loop
+    printf("Graphics mode exited successfully\n")
+    "Graphics mode exited successfully"
+< proj_main_loop(2, ["/home/lcom/labs/grupo_2leic10_2/proj/src/proj", "/dev/console", NULL]) -> (ret: 0)

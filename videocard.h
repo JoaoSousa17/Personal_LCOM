@@ -21,6 +21,13 @@ int map_vram(uint16_t mode);
 int set_graphics_mode(uint16_t mode);
 
 /**
+ * @brief Exits graphics mode and returns to text mode
+ * 
+ * @return 0 on success, non-zero otherwise
+ */
+int exit_graphics_mode();
+
+/**
  * @brief Gets the horizontal resolution of the current video mode
  * 
  * @return Horizontal resolution
@@ -48,4 +55,4 @@ uint8_t get_bits_per_pixel();
  */
 vbe_mode_info_t *get_vmi_p();
 
-#endif /* _VIDEOCARD_H_ */ 
+#endif /* _VIDEOCARD_H_ */

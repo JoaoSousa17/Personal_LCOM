@@ -15,7 +15,6 @@ int map_vram(uint16_t mode) {
   struct minix_mem_range mr;
   unsigned int vram_base;  /* VRAM's physical address */
   unsigned int vram_size;  /* VRAM's size */
-  // int r;
 
   /* Initialize vbe_mode_info_t struct */
   if (vbe_get_mode_info(mode, &vmi_p) != OK) {
@@ -73,6 +72,29 @@ int set_graphics_mode(uint16_t mode) {
   if (sys_int86(&reg86) != OK) {
     printf("set_graphics_mode(): sys_int86() failed\n");
     return 1;
+  }
+
+  return 0;
+}
+
+int exit_graphics_mode() {
+  reg86_t reg86;
+
+  memset(&reg86, 0, sizeof(reg86));
+  reg86.intno = 0x10;
+  reg86.ah = 0x00;
+  reg86.al = 0x03;  /* Standard text mode (80x25) */
+
+  if (sys_int86(&reg86) != OK) {
+    printf("exit_graphics_mode(): sys_int86() failed\n");
+    return 1;
+  }
+
+  /* Unmap VRAM if it was mapped */
+  if (video_mem != NULL) {
+    uint32_t vram_size = h_res * v_res * bytes_per_pixel;
+    vm_unmap_phys(SELF, video_mem, vram_size);
+    video_mem = NULL;
   }
 
   return 0;

@@ -1,0 +1,14 @@
+Graphics mode 0x115 initialized successfully
+Resolution: 800x600, 24 bits per pixel
+Press ESC to exit graphics mode
+Scancode: 0x9C
+Scancode: 0x01
+ESC key detected, exiting graphics mode...
+Graphics mode exited successfully
+Graphics mode 0x115 initialized successfully
+Resolution: 800x600, 24 bits per pixel
+Press ESC to exit graphics mode
+Scancode: 0x81
+Scancode: 0x01
+ESC key detected, exiting graphics mode...
+Graphics mode exited successfully

@@ -1,5 +1,4 @@
 #include "keyboard.h"
-#include "utils.h"
 
 #include <lcom/lcf.h>
 #include <minix/sysutil.h>
@@ -7,6 +6,7 @@
 #include <stdint.h>
 
 #define KBD_IRQ 1    /* Keyboard IRQ line */
+#define ESC_MAKE 0x01  /* ESC make code */
 #define ESC_BREAK 0x81  /* ESC break code */
 
 /* KBC I/O ports */
@@ -21,6 +21,15 @@
 
 static int hook_id = KBD_IRQ;
 static uint8_t scancode = 0;
+static bool esc_pressed = false;
+
+// Custom implementation of util_sys_inb
+int util_sys_inb(int port, uint8_t *value) {
+  uint32_t val32;
+  int status = sys_inb(port, &val32);
+  *value = (uint8_t) val32;
+  return status;
+}
 
 int kbd_subscribe_int(uint8_t *bit_no) {
   *bit_no = hook_id;
@@ -44,15 +53,17 @@ bool is_kbd_interrupt(int ipc_status) {
 }
 
 bool is_esc_key() {
-  return (scancode == ESC_BREAK);
+  /* Reset the flag for next check */
+  bool was_pressed = esc_pressed;
+  esc_pressed = false;
+  return was_pressed;
 }
 
-// No kbd_int_handler(), corrigir as verificações:
 int kbd_int_handler() {
   uint8_t status;
   
   /* Read status register */
-  if (util_sys_inb(KBC_ST_REG, &status) != 0) { 
+  if (util_sys_inb(KBC_ST_REG, &status) != OK) {
     printf("kbd_int_handler(): util_sys_inb() failed reading status\n");
     return 1;
   }
@@ -66,12 +77,19 @@ int kbd_int_handler() {
   /* Check if output buffer is full */
   if (status & KBC_OBF) {
     /* Read scancode from output buffer */
-    if (util_sys_inb(KBC_OUT_BUF, &scancode) != 0) { 
+    if (util_sys_inb(KBC_OUT_BUF, &scancode) != OK) {
       printf("kbd_int_handler(): util_sys_inb() failed reading scancode\n");
       return 1;
     }
+    
+    /* Check if it's the ESC key */
+    if (scancode == ESC_MAKE) {
+      esc_pressed = true;
+    }
+    
+    /* For debugging */
+    printf("Scancode: 0x%02X\n", scancode);
   }
   
   return 0;
-}
-
+} 
