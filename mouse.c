@@ -1,5 +1,6 @@
 #include <lcom/lcf.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include "i8042.h"
 #include "utils.h"
 #include "mouse.h"
@@ -105,8 +106,17 @@ void (mouse_ih_custom)() {
                 if (mouse_y >= get_v_res()) mouse_y = get_v_res() - 1;
                 
                 // Mark that menu needs redraw due to mouse movement
-                menu_needs_redraw = true;
-                page_needs_redraw = true;
+                // Only mark for redraw if we're in main menu or if significant movement
+                if (get_game_state() == STATE_MAIN_MENU) {
+                    menu_needs_redraw = true;
+                    page_needs_redraw = true;
+                } else {
+                    // For other states like leaderboard, only redraw if there was movement
+                    if (pp.delta_x != 0 || pp.delta_y != 0) {
+                        menu_needs_redraw = true; 
+                        // Don't set page_needs_redraw for leaderboard to avoid constant redraws
+                    }
+                }
                 
                 mouse_bytes_counter = 0; // Reset contador
                 mouseCounter++; // Mais um pacote processado

@@ -1,10 +1,12 @@
 #include <lcom/lcf.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "videocard.h"
 #include "keyboard.h"
 #include "mouse.h"
 #include "font.h"
+#include "leaderboard.h"
 
 uint16_t mode;
 uint8_t kbd_bit_no = 0;
@@ -164,19 +166,30 @@ int (proj_main_loop)(int argc, char* argv[])
                 mouse_clear_page_redraw_flag();
               }
               
-              /* Handle left click only in main menu */
-              if (pp.lb && get_game_state() == STATE_MAIN_MENU) {
+              /* Handle left click based on current state */
+              if (pp.lb) {
                 uint16_t mouse_x = mouse_get_x();
                 uint16_t mouse_y = mouse_get_y();
                 
-                int click_result = handle_menu_click(mouse_x, mouse_y, true);
-                if (click_result == 1) { // Quit was clicked
-                  printf("Quit selected, exiting graphics mode...\n");
-                  running = false;
-                } else if (click_result == 0) {
-                  /* State changed, redraw page */
-                  if (draw_current_page(mouse_x, mouse_y) != 0) {
-                    printf("Error drawing new page\n");
+                if (get_game_state() == STATE_MAIN_MENU) {
+                  int click_result = handle_menu_click(mouse_x, mouse_y, true);
+                  if (click_result == 1) { // Quit was clicked
+                    printf("Quit selected, exiting graphics mode...\n");
+                    running = false;
+                  } else if (click_result == 0) {
+                    /* State changed, redraw page */
+                    if (draw_current_page(mouse_x, mouse_y) != 0) {
+                      printf("Error drawing new page\n");
+                    }
+                  }
+                } else if (get_game_state() == STATE_LEADERBOARD) {
+                  int click_result = handle_leaderboard_click(mouse_x, mouse_y, true);
+                  if (click_result == 1) { // Back button was clicked
+                    printf("Back button clicked, returning to main menu...\n");
+                    set_game_state(STATE_MAIN_MENU);
+                    if (draw_current_page(mouse_x, mouse_y) != 0) {
+                      printf("Error drawing main menu\n");
+                    }
                   }
                 }
               }

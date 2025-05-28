@@ -1,8 +1,10 @@
 #include "videocard.h"
 #include "font.h"
+#include "leaderboard.h"
 #include <machine/int86.h>
 #include <lcom/vbe.h>
 #include <string.h>
+#include <stdbool.h>
 
 void *video_mem;         /* Process (virtual) address to which VRAM is mapped */
 static vbe_mode_info_t vmi_p;   /* VBE mode information */
@@ -302,28 +304,13 @@ int draw_main_page() {
 }
 
 int draw_leaderboard() {
-  /* Define colors */
-  uint32_t bg_color = 0x1a1a2e;
-  uint32_t orange = 0xff6b35;
-  uint32_t white = 0xffffff;
-  
-  /* Clear screen */
-  if (clear_screen(bg_color) != 0) return 1;
-  
-  /* Draw title */
-  const char *title = "LEADERBOARD";
-  uint16_t title_x = (h_res - strlen(title) * 8 * 3) / 2;
-  if (draw_string_scaled(title_x, 50, title, orange, 3) != 0) return 1;
-  
-  /* Draw placeholder content */
-  if (draw_string_scaled(100, 150, "1. Player1 - 1000 pts", white, 2) != 0) return 1;
-  if (draw_string_scaled(100, 180, "2. Player2 - 800 pts", white, 2) != 0) return 1;
-  if (draw_string_scaled(100, 210, "3. Player3 - 600 pts", white, 2) != 0) return 1;
-  
-  /* Draw back instruction */
-  if (draw_string_scaled(100, 400, "Press ESC to go back", white, 1) != 0) return 1;
-  
-  return 0;
+  /* Use the new graphics leaderboard function with mouse support */
+  return draw_leaderboard_graphics();
+}
+
+int draw_leaderboard_with_hover(uint16_t mouse_x, uint16_t mouse_y) {
+  /* Use the leaderboard function with mouse support */
+  return draw_leaderboard_with_mouse(mouse_x, mouse_y);
 }
 
 int draw_filled_rectangle(uint16_t x, uint16_t y, uint16_t width, uint16_t height, uint32_t color) {
@@ -525,7 +512,7 @@ int draw_current_page(uint16_t mouse_x, uint16_t mouse_y) {
     case STATE_MULTIPLAYER:
       return draw_init_mp_game();
     case STATE_LEADERBOARD:
-      return draw_leaderboard();
+      return draw_leaderboard_with_hover(mouse_x, mouse_y);
     case STATE_INSTRUCTIONS:
       return draw_instructions();
     default:

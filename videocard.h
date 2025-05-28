@@ -134,6 +134,15 @@ int draw_main_page();
 int draw_leaderboard();
 
 /**
+ * @brief Draw leaderboard screen with mouse support
+ * 
+ * @param mouse_x Current mouse X position
+ * @param mouse_y Current mouse Y position
+ * @return 0 on success, non-zero otherwise
+ */
+int draw_leaderboard_with_hover(uint16_t mouse_x, uint16_t mouse_y);
+
+/**
  * @brief Draw instructions screen
  * 
  * @return 0 on success, non-zero otherwise
@@ -225,6 +234,19 @@ void set_game_state(game_state_t state);
  * @return 0 on success, non-zero otherwise
  */
 int draw_current_page(uint16_t mouse_x, uint16_t mouse_y);
+
+/**
+ * @brief Check if a point is inside a rectangle
+ * 
+ * @param px Point X coordinate
+ * @param py Point Y coordinate
+ * @param rx Rectangle X coordinate
+ * @param ry Rectangle Y coordinate
+ * @param rw Rectangle width
+ * @param rh Rectangle height
+ * @return True if point is inside rectangle
+ */
+bool is_point_in_rect(uint16_t px, uint16_t py, uint16_t rx, uint16_t ry, uint16_t rw, uint16_t rh);
 
 // Declare video_mem as external for other modules to access
 extern void *video_mem;

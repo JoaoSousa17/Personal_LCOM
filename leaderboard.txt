@@ -1,0 +1,5 @@
+JPT "Profissões" 16
+TNA "Espaço" 16
+JPS "Instrumentos Musicais" 13
+JPS "Instrumentos Musicais" 12
+JPS "Instrumentos Musicais" 10

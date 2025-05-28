@@ -41,6 +41,17 @@ int draw_char(uint16_t x, uint16_t y, char ch, uint32_t color);
 int draw_char_scaled(uint16_t x, uint16_t y, char ch, uint32_t color, uint8_t scale);
 
 /**
+ * @brief Draw a string at specified position
+ * 
+ * @param x X coordinate
+ * @param y Y coordinate
+ * @param str String to draw
+ * @param color Color of the text
+ * @return 0 on success, non-zero otherwise
+ */
+int draw_string(uint16_t x, uint16_t y, const char *str, uint32_t color);
+
+/**
  * @brief Draw a string at specified position with scale
  * 
  * @param x X coordinate
