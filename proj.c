@@ -134,6 +134,7 @@ int (proj_main_loop)(int argc, char* argv[])
     if (is_ipc_notify(ipc_status)) {
       switch (_ENDPOINT_P(msg.m_source)) {
         case HARDWARE:
+          // Parte relevante do proj.c - dentro do main loop, na secção do timer interrupt:
           if (msg.m_notify.interrupts & BIT(timer_bit_no)) {
             /* Handle timer interrupt */
             timer_int_handler();
@@ -141,13 +142,28 @@ int (proj_main_loop)(int argc, char* argv[])
             /* Handle countdown updates for single player mode */
             if (get_game_state() == STATE_SP_COUNTDOWN) {
               jogo_t *game = get_current_game();
-              if (game_update_countdown(game)) {
+              bool countdown_finished = game_update_countdown(game);
+              
+              if (countdown_finished) {
                 /* Countdown finished, move to letter rain state */
                 printf("Countdown finished, starting letter rain...\n");
+                
+                /* Primeiro inicializa o letter rain */
                 if (game_start_letter_rain(game) != 0) {
                   printf("Error starting letter rain mini-game\n");
+                  /* Em caso de erro, volta ao menu principal */
+                  set_game_state(STATE_MAIN_MENU);
+                  uint16_t mouse_x = mouse_get_x();
+                  uint16_t mouse_y = mouse_get_y();
+                  if (draw_current_page(mouse_x, mouse_y) != 0) {
+                    printf("Error drawing main menu\n");
+                  }
                 } else {
+                  /* Letter rain inicializado com sucesso */
+                  printf("Letter rain initialized successfully\n");
                   set_game_state(STATE_SP_LETTER_RAIN);
+                  
+                  /* Força redesenho da página */
                   uint16_t mouse_x = mouse_get_x();
                   uint16_t mouse_y = mouse_get_y();
                   if (draw_current_page(mouse_x, mouse_y) != 0) {
@@ -155,10 +171,12 @@ int (proj_main_loop)(int argc, char* argv[])
                   }
                 }
               } else {
-                /* Redraw countdown page with updated number */
+                /* Ainda na contagem regressiva, mas pode ter mudado o número */
+                /* Redesenha a página para mostrar a mudança */
                 static uint8_t last_countdown_value = 255; /* Initialize to invalid value */
                 if (last_countdown_value != game->countdown) {
                   last_countdown_value = game->countdown;
+                  printf("Countdown: %d\n", game->countdown);
                   uint16_t mouse_x = mouse_get_x();
                   uint16_t mouse_y = mouse_get_y();
                   if (draw_current_page(mouse_x, mouse_y) != 0) {
@@ -187,7 +205,7 @@ int (proj_main_loop)(int argc, char* argv[])
                   printf("Error drawing next page\n");
                 }
               } else {
-                /* Redraw letter rain */
+                /* Redraw letter rain a cada frame para animação */
                 uint16_t mouse_x = mouse_get_x();
                 uint16_t mouse_y = mouse_get_y();
                 if (draw_current_page(mouse_x, mouse_y) != 0) {

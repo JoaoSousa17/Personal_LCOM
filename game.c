@@ -91,14 +91,14 @@ bool game_update_countdown(jogo_t *game) {
   /* Timer runs at 60Hz, so 60 interrupts = 1 second */
   if (game->timer_counter >= 60) {
     game->timer_counter = 0;
+    
     if (game->countdown > 0) {
       game->countdown--;
       return false; /* Still counting down, number changed */
-    }
-    /* When countdown reaches 0, transition to letter rain */
-    if (game->countdown == 0) {
-      game->state = GAME_STATE_LETTER_RAIN;
-      return true; /* Countdown finished */
+    } else {
+      /* countdown já está em 0, já mostrámos GO por 1 segundo */
+      /* NÃO muda o estado aqui - deixa o código principal fazer isso */
+      return true; /* Countdown finished, ready to move to letter rain */
     }
   }
   
@@ -400,14 +400,20 @@ int handle_initials_keyboard(uint8_t scancode) {
 }
 
 int game_start_letter_rain(jogo_t *game) {
-  if (game == NULL)
-    return 1;
-  
-  /* Initialize the letter rain mini-game */
-  if (letter_rain_init(&game->letter_rain_game) != 0) {
+  if (game == NULL) {
+    printf("game_start_letter_rain: game is NULL\n");
     return 1;
   }
   
+  printf("Initializing letter rain game...\n");
+  
+  /* Initialize the letter rain mini-game */
+  if (letter_rain_init(&game->letter_rain_game) != 0) {
+    printf("game_start_letter_rain: letter_rain_init failed\n");
+    return 1;
+  }
+  
+  printf("Letter rain initialized successfully\n");
   game->state = GAME_STATE_LETTER_RAIN;
   return 0;
 }
