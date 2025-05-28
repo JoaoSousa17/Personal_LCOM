@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "letter_rain.h"
 
 /* Maximum length for player initials */
 #define MAX_INITIALS 4
@@ -11,6 +12,7 @@
 typedef enum {
   GAME_STATE_ENTER_INITIALS,
   GAME_STATE_COUNTDOWN,
+  GAME_STATE_LETTER_RAIN,
   GAME_STATE_PLAYING,
   GAME_STATE_FINISHED
 } single_player_state_t;

@@ -520,6 +520,8 @@ int draw_current_page(uint16_t mouse_x, uint16_t mouse_y) {
       return draw_enter_initials_page(mouse_x, mouse_y);
     case STATE_SP_COUNTDOWN:
       return draw_countdown_page(); /* No mouse support */
+    case STATE_SP_LETTER_RAIN:
+      return game_draw_letter_rain(get_current_game()); /* No mouse support */
     case STATE_SP_PLAYING:
       return draw_countdown_page(); /* No mouse support - will be replaced with game page */
     default:

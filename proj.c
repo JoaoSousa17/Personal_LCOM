@@ -142,13 +142,17 @@ int (proj_main_loop)(int argc, char* argv[])
             if (get_game_state() == STATE_SP_COUNTDOWN) {
               jogo_t *game = get_current_game();
               if (game_update_countdown(game)) {
-                /* Countdown finished, move to playing state */
-                printf("Countdown finished, starting game...\n");
-                set_game_state(STATE_SP_PLAYING);
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error drawing playing page\n");
+                /* Countdown finished, move to letter rain state */
+                printf("Countdown finished, starting letter rain...\n");
+                if (game_start_letter_rain(game) != 0) {
+                  printf("Error starting letter rain mini-game\n");
+                } else {
+                  set_game_state(STATE_SP_LETTER_RAIN);
+                  uint16_t mouse_x = mouse_get_x();
+                  uint16_t mouse_y = mouse_get_y();
+                  if (draw_current_page(mouse_x, mouse_y) != 0) {
+                    printf("Error drawing letter rain page\n");
+                  }
                 }
               } else {
                 /* Redraw countdown page with updated number */
@@ -163,6 +167,34 @@ int (proj_main_loop)(int argc, char* argv[])
                 }
               }
             }
+            
+            /* Handle letter rain updates */
+            if (get_game_state() == STATE_SP_LETTER_RAIN) {
+              jogo_t *game = get_current_game();
+              int lr_result = game_update_letter_rain(game);
+              if (lr_result == 1) {
+                /* Letter rain finished */
+                if (game->letra != 0) {
+                  printf("Letter rain finished, caught letter: %c\n", game->letra);
+                  set_game_state(STATE_SP_PLAYING);
+                } else {
+                  printf("Letter rain failed, game over\n");
+                  set_game_state(STATE_MAIN_MENU);
+                }
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                if (draw_current_page(mouse_x, mouse_y) != 0) {
+                  printf("Error drawing next page\n");
+                }
+              } else {
+                /* Redraw letter rain */
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                if (draw_current_page(mouse_x, mouse_y) != 0) {
+                  printf("Error redrawing letter rain page\n");
+                }
+              }
+            }
           }
           
           if (msg.m_notify.interrupts & BIT(kbd_bit_no)) {
@@ -172,9 +204,17 @@ int (proj_main_loop)(int argc, char* argv[])
             /* Check if ESC key was pressed */
             if (is_esc_key()) {
               game_state_t current = get_game_state();
-              if (current == STATE_SP_ENTER_INITIALS || current == STATE_SP_COUNTDOWN || current == STATE_SP_PLAYING) {
+              if (current == STATE_SP_ENTER_INITIALS || current == STATE_SP_COUNTDOWN || 
+                  current == STATE_SP_LETTER_RAIN || current == STATE_SP_PLAYING) {
                 /* In single player mode, ESC goes back to main menu */
                 printf("Exiting single player mode...\n");
+                
+                /* Cleanup letter rain if active */
+                if (current == STATE_SP_LETTER_RAIN) {
+                  jogo_t *game = get_current_game();
+                  game_cleanup_letter_rain(game);
+                }
+                
                 set_game_state(STATE_MAIN_MENU);
                 uint16_t mouse_x = mouse_get_x();
                 uint16_t mouse_y = mouse_get_y();
@@ -219,14 +259,23 @@ int (proj_main_loop)(int argc, char* argv[])
                 }
               }
             }
+            
+            /* Handle keyboard input for letter rain */
+            if (get_game_state() == STATE_SP_LETTER_RAIN) {
+              jogo_t *game = get_current_game();
+              if (game_handle_letter_rain_input(game, last_scancode) != 0) {
+                printf("Error handling letter rain input\n");
+              }
+            }
           }
           
           if (msg.m_notify.interrupts & BIT(mouse_bit_no)) {
             /* Handle mouse interrupt only for certain states */
             game_state_t current_state = get_game_state();
             
-            /* Ignore mouse during countdown and playing */
-            if (current_state == STATE_SP_COUNTDOWN || current_state == STATE_SP_PLAYING) {
+            /* Ignore mouse during countdown, letter rain and playing */
+            if (current_state == STATE_SP_COUNTDOWN || current_state == STATE_SP_LETTER_RAIN || 
+                current_state == STATE_SP_PLAYING) {
               /* Just clear the mouse packet but don't process it */
               mouse_ih_custom();
               if (mouse_has_packet_ready()) {

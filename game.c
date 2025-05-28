@@ -1,6 +1,7 @@
 #include "game.h"
 #include "videocard.h"
 #include "font.h"
+#include "letter_rain.h"
 #include <string.h>
 #include <ctype.h>
 
@@ -38,6 +39,9 @@ void game_init(jogo_t *game) {
   game->state = GAME_STATE_ENTER_INITIALS;
   game->countdown = 3;
   game->timer_counter = 0;
+  
+  /* Initialize letter rain game */
+  memset(&game->letter_rain_game, 0, sizeof(letter_rain_t));
 }
 
 jogo_t* get_current_game() {
@@ -91,9 +95,9 @@ bool game_update_countdown(jogo_t *game) {
       game->countdown--;
       return false; /* Still counting down, number changed */
     }
-    /* When countdown reaches 0, transition to playing */
+    /* When countdown reaches 0, transition to letter rain */
     if (game->countdown == 0) {
-      game->state = GAME_STATE_PLAYING;
+      game->state = GAME_STATE_LETTER_RAIN;
       return true; /* Countdown finished */
     }
   }
@@ -393,4 +397,81 @@ int handle_initials_keyboard(uint8_t scancode) {
   }
   
   return -1; /* No action */
+}
+
+int game_start_letter_rain(jogo_t *game) {
+  if (game == NULL)
+    return 1;
+  
+  /* Initialize the letter rain mini-game */
+  if (letter_rain_init(&game->letter_rain_game) != 0) {
+    return 1;
+  }
+  
+  game->state = GAME_STATE_LETTER_RAIN;
+  return 0;
+}
+
+int game_update_letter_rain(jogo_t *game) {
+  if (game == NULL || game->state != GAME_STATE_LETTER_RAIN)
+    return 1;
+  
+  /* Update the letter rain game */
+  int result = letter_rain_update(&game->letter_rain_game);
+  
+  if (result == 1) {
+    /* Letter rain game finished */
+    if (game->letter_rain_game.caught_letter != 0) {
+      /* A letter was caught */
+      game->letra = game->letter_rain_game.caught_letter;
+      game->state = GAME_STATE_PLAYING;
+      return 1; /* Transition to main game */
+    } else {
+      /* Game over (too many misses) */
+      game->state = GAME_STATE_FINISHED;
+      return 1;
+    }
+  }
+  
+  return 0; /* Continue letter rain */
+}
+
+int game_draw_letter_rain(jogo_t *game) {
+  if (game == NULL || game->state != GAME_STATE_LETTER_RAIN)
+    return 1;
+  
+  /* Draw the letter rain game */
+  if (letter_rain_draw(&game->letter_rain_game) != 0)
+    return 1;
+  
+  /* Draw game info */
+  char info[100];
+  snprintf(info, sizeof(info), "Jogador: %s", game->nome);
+  if (draw_string_scaled(20, 60, info, 0xFFD700, 2) != 0)
+    return 1;
+  
+  /* Draw instructions */
+  if (draw_string_scaled(20, get_v_res() - 80, "Apanha uma letra para comecar o jogo!", 0x00FF88, 1) != 0)
+    return 1;
+  
+  if (draw_string_scaled(20, get_v_res() - 60, "Nao deixes cair 2 letras na borda!", 0xFF4444, 1) != 0)
+    return 1;
+  
+  return 0;
+}
+
+int game_handle_letter_rain_input(jogo_t *game, uint8_t scancode) {
+  if (game == NULL || game->state != GAME_STATE_LETTER_RAIN)
+    return 1;
+  
+  /* Pass input to letter rain handler */
+  return letter_rain_handle_input(&game->letter_rain_game, scancode);
+}
+
+void game_cleanup_letter_rain(jogo_t *game) {
+  if (game == NULL)
+    return;
+  
+  /* Cleanup letter rain resources */
+  letter_rain_cleanup(&game->letter_rain_game);
 }
