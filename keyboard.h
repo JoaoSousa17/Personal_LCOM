@@ -5,6 +5,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* Expose last scancode for game logic */
+extern uint8_t last_scancode;
+
 /**
  * @brief Checks if an interrupt is from the keyboard
  * 

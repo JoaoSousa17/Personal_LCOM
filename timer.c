@@ -4,6 +4,10 @@
 #include <stdint.h>
 #include "i8254.h"
 
+/* Timer variables */
+static int timer_hook_id = 0;
+static uint32_t timer_counter = 0;
+
 // Funções aux para Primeira Função do Lab
 int (timer_get_conf)(uint8_t timer, uint8_t *st) {
   uint8_t code = TIMER_RB_CMD | TIMER_RB_SEL(timer) | TIMER_RB_COUNT_;
@@ -95,20 +99,26 @@ int (timer_set_frequency)(uint8_t timer, uint32_t freq) {
 }
 
 int (timer_subscribe_int)(uint8_t *bit_no) {
-    /* To be implemented by the students */
-  printf("%s is not yet implemented!\n", __func__);
-
-  return 1;
+  timer_hook_id = 0; /* Use timer 0 */
+  *bit_no = timer_hook_id;
+  
+  if (sys_irqsetpolicy(TIMER0_IRQ, IRQ_REENABLE, &timer_hook_id) != OK) {
+    printf("timer_subscribe_int(): sys_irqsetpolicy() failed\n");
+    return 1;
+  }
+  
+  return 0;
 }
 
 int (timer_unsubscribe_int)() {
-  /* To be implemented by the students */
-  printf("%s is not yet implemented!\n", __func__);
-
-  return 1;
+  if (sys_irqrmpolicy(&timer_hook_id) != OK) {
+    printf("timer_unsubscribe_int(): sys_irqrmpolicy() failed\n");
+    return 1;
+  }
+  
+  return 0;
 }
 
 void (timer_int_handler)() {
-  /* To be implemented by the students */
-  printf("%s is not yet implemented!\n", __func__);
+  timer_counter++;
 }

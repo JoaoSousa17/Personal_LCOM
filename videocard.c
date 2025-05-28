@@ -1,6 +1,7 @@
 #include "videocard.h"
 #include "font.h"
 #include "leaderboard.h"
+#include "game.h"
 #include <machine/int86.h>
 #include <lcom/vbe.h>
 #include <string.h>
@@ -515,6 +516,12 @@ int draw_current_page(uint16_t mouse_x, uint16_t mouse_y) {
       return draw_leaderboard_with_hover(mouse_x, mouse_y);
     case STATE_INSTRUCTIONS:
       return draw_instructions_with_mouse(mouse_x, mouse_y);
+    case STATE_SP_ENTER_INITIALS:
+      return draw_enter_initials_page(mouse_x, mouse_y);
+    case STATE_SP_COUNTDOWN:
+      return draw_countdown_page(); /* No mouse support */
+    case STATE_SP_PLAYING:
+      return draw_countdown_page(); /* No mouse support - will be replaced with game page */
     default:
       return draw_main_page_with_hover(mouse_x, mouse_y);
   }
@@ -682,11 +689,13 @@ int draw_init_sp_game() {
   if (draw_string_scaled(title_x, 50, title, orange, 3) != 0) return 1;
   
   /* Draw game setup */
-  if (draw_string_scaled(100, 200, "Starting single player game...", white, 2) != 0) return 1;
-  if (draw_string_scaled(100, 250, "Get ready to fight!", white, 2) != 0) return 1;
+  if (draw_string_scaled(100, 200, "Iniciando modo single player...", white, 2) != 0) return 1;
+  if (draw_string_scaled(100, 250, "A preparar jogo...", white, 2) != 0) return 1;
   
-  /* Draw back instruction */
-  if (draw_string_scaled(100, 400, "Press ESC to go back", white, 1) != 0) return 1;
+  /* Initialize game and move to initials entry */
+  jogo_t *game = get_current_game();
+  game_init(game);
+  set_game_state(STATE_SP_ENTER_INITIALS);
   
   return 0;
 }

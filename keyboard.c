@@ -22,6 +22,7 @@
 static int hook_id = KBD_IRQ;
 static uint8_t scancode = 0;
 static bool esc_pressed = false;
+uint8_t last_scancode = 0; /* Expose last scancode for game logic */
 
 int kbd_subscribe_int(uint8_t *bit_no) {
   *bit_no = hook_id;
@@ -74,6 +75,9 @@ int kbd_int_handler() {
       return 1;
     }
     
+    /* Store last scancode for game logic */
+    last_scancode = scancode;
+    
     /* Check if it's the ESC key */
     if (scancode == ESC_MAKE) {
       esc_pressed = true;
@@ -84,4 +88,4 @@ int kbd_int_handler() {
   }
   
   return 0;
-} 
+}

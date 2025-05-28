@@ -7,10 +7,13 @@
 #include "mouse.h"
 #include "font.h"
 #include "leaderboard.h"
+#include "game.h"
+#include "utils.h"
 
 uint16_t mode;
 uint8_t kbd_bit_no = 0;
 uint8_t mouse_bit_no = 0;
+uint8_t timer_bit_no = 0;
 
 // Define some colors for different bit depths
 #define COLOR_WHITE 0xFFFFFF
@@ -92,6 +95,15 @@ int (proj_main_loop)(int argc, char* argv[])
     return 1;
   }
   
+  /* Subscribe timer interrupts */
+  if (timer_subscribe_int(&timer_bit_no) != 0) {
+    printf("Error subscribing timer interrupts\n");
+    mouse_disable();
+    kbd_unsubscribe_int();
+    exit_graphics_mode();
+    return 1;
+  }
+  
   /* Initialize font system */
   font_init();
   
@@ -122,13 +134,54 @@ int (proj_main_loop)(int argc, char* argv[])
     if (is_ipc_notify(ipc_status)) {
       switch (_ENDPOINT_P(msg.m_source)) {
         case HARDWARE:
+          if (msg.m_notify.interrupts & BIT(timer_bit_no)) {
+            /* Handle timer interrupt */
+            timer_int_handler();
+            
+            /* Handle countdown updates for single player mode */
+            if (get_game_state() == STATE_SP_COUNTDOWN) {
+              jogo_t *game = get_current_game();
+              if (game_update_countdown(game)) {
+                /* Countdown finished, move to playing state */
+                printf("Countdown finished, starting game...\n");
+                set_game_state(STATE_SP_PLAYING);
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                if (draw_current_page(mouse_x, mouse_y) != 0) {
+                  printf("Error drawing playing page\n");
+                }
+              } else {
+                /* Redraw countdown page with updated number */
+                static uint8_t last_countdown_value = 255; /* Initialize to invalid value */
+                if (last_countdown_value != game->countdown) {
+                  last_countdown_value = game->countdown;
+                  uint16_t mouse_x = mouse_get_x();
+                  uint16_t mouse_y = mouse_get_y();
+                  if (draw_current_page(mouse_x, mouse_y) != 0) {
+                    printf("Error redrawing countdown page\n");
+                  }
+                }
+              }
+            }
+          }
+          
           if (msg.m_notify.interrupts & BIT(kbd_bit_no)) {
             /* Handle keyboard interrupt */
             kbd_int_handler();
             
             /* Check if ESC key was pressed */
             if (is_esc_key()) {
-              if (get_game_state() != STATE_MAIN_MENU) {
+              game_state_t current = get_game_state();
+              if (current == STATE_SP_ENTER_INITIALS || current == STATE_SP_COUNTDOWN || current == STATE_SP_PLAYING) {
+                /* In single player mode, ESC goes back to main menu */
+                printf("Exiting single player mode...\n");
+                set_game_state(STATE_MAIN_MENU);
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                if (draw_current_page(mouse_x, mouse_y) != 0) {
+                  printf("Error drawing main menu\n");
+                }
+              } else if (current != STATE_MAIN_MENU) {
                 /* Go back to main menu */
                 printf("Going back to main menu...\n");
                 set_game_state(STATE_MAIN_MENU);
@@ -143,61 +196,107 @@ int (proj_main_loop)(int argc, char* argv[])
                 running = false;
               }
             }
+            
+            /* Handle keyboard input for initials entry */
+            if (get_game_state() == STATE_SP_ENTER_INITIALS) {
+              int kb_result = handle_initials_keyboard(last_scancode);
+              if (kb_result == 1) {
+                /* Initials confirmed, start countdown */
+                jogo_t *game = get_current_game();
+                game_start_countdown(game);
+                set_game_state(STATE_SP_COUNTDOWN);
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                if (draw_current_page(mouse_x, mouse_y) != 0) {
+                  printf("Error drawing countdown page\n");
+                }
+              } else if (kb_result == 0) {
+                /* Character added/removed, redraw */
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                if (draw_current_page(mouse_x, mouse_y) != 0) {
+                  printf("Error redrawing initials page\n");
+                }
+              }
+            }
           }
           
           if (msg.m_notify.interrupts & BIT(mouse_bit_no)) {
-            /* Handle mouse interrupt */
-            mouse_ih_custom();
+            /* Handle mouse interrupt only for certain states */
+            game_state_t current_state = get_game_state();
             
-            /* Check if mouse packet is ready */
-            if (mouse_has_packet_ready()) {
-              struct packet pp = mouse_get_packet();
-              mouse_clear_packet_ready();
-              
-              /* Redraw page if needed (mouse moved or state changed) */
-              if (mouse_menu_needs_redraw() || mouse_should_redraw_page()) {
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error redrawing page\n");
-                }
-                mouse_clear_redraw_flag();
-                mouse_clear_page_redraw_flag();
+            /* Ignore mouse during countdown and playing */
+            if (current_state == STATE_SP_COUNTDOWN || current_state == STATE_SP_PLAYING) {
+              /* Just clear the mouse packet but don't process it */
+              mouse_ih_custom();
+              if (mouse_has_packet_ready()) {
+                mouse_clear_packet_ready();
               }
+            } else {
+              /* Normal mouse processing for other states */
+              mouse_ih_custom();
               
-              /* Handle left click based on current state */
-              if (pp.lb) {
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
+              /* Check if mouse packet is ready */
+              if (mouse_has_packet_ready()) {
+                struct packet pp = mouse_get_packet();
+                mouse_clear_packet_ready();
                 
-                if (get_game_state() == STATE_MAIN_MENU) {
-                  int click_result = handle_menu_click(mouse_x, mouse_y, true);
-                  if (click_result == 1) { // Quit was clicked
-                    printf("Quit selected, exiting graphics mode...\n");
-                    running = false;
-                  } else if (click_result == 0) {
-                    /* State changed, redraw page */
-                    if (draw_current_page(mouse_x, mouse_y) != 0) {
-                      printf("Error drawing new page\n");
-                    }
+                /* Redraw page if needed (mouse moved or state changed) */
+                if (mouse_menu_needs_redraw() || mouse_should_redraw_page()) {
+                  uint16_t mouse_x = mouse_get_x();
+                  uint16_t mouse_y = mouse_get_y();
+                  
+                  if (draw_current_page(mouse_x, mouse_y) != 0) {
+                    printf("Error redrawing page\n");
                   }
-                } else if (get_game_state() == STATE_LEADERBOARD) {
-                  int click_result = handle_leaderboard_click(mouse_x, mouse_y, true);
-                  if (click_result == 1) { // Back button was clicked
-                    printf("Back button clicked, returning to main menu...\n");
-                    set_game_state(STATE_MAIN_MENU);
-                    if (draw_current_page(mouse_x, mouse_y) != 0) {
-                      printf("Error drawing main menu\n");
+                  mouse_clear_redraw_flag();
+                  mouse_clear_page_redraw_flag();
+                }
+                
+                /* Handle left click based on current state */
+                if (pp.lb) {
+                  uint16_t mouse_x = mouse_get_x();
+                  uint16_t mouse_y = mouse_get_y();
+                  
+                  if (get_game_state() == STATE_MAIN_MENU) {
+                    int click_result = handle_menu_click(mouse_x, mouse_y, true);
+                    if (click_result == 1) { // Quit was clicked
+                      printf("Quit selected, exiting graphics mode...\n");
+                      running = false;
+                    } else if (click_result == 0) {
+                      /* State changed, redraw page */
+                      if (draw_current_page(mouse_x, mouse_y) != 0) {
+                        printf("Error drawing new page\n");
+                      }
                     }
-                  }
-                } else if (get_game_state() == STATE_INSTRUCTIONS) {
-                  int click_result = handle_instructions_click(mouse_x, mouse_y, true);
-                  if (click_result == 1) { // Back button was clicked
-                    printf("Back button clicked, returning to main menu...\n");
-                    set_game_state(STATE_MAIN_MENU);
-                    if (draw_current_page(mouse_x, mouse_y) != 0) {
-                      printf("Error drawing main menu\n");
+                  } else if (get_game_state() == STATE_LEADERBOARD) {
+                    int click_result = handle_leaderboard_click(mouse_x, mouse_y, true);
+                    if (click_result == 1) { // Back button was clicked
+                      printf("Back button clicked, returning to main menu...\n");
+                      set_game_state(STATE_MAIN_MENU);
+                      if (draw_current_page(mouse_x, mouse_y) != 0) {
+                        printf("Error drawing main menu\n");
+                      }
+                    }
+                  } else if (get_game_state() == STATE_INSTRUCTIONS) {
+                    int click_result = handle_instructions_click(mouse_x, mouse_y, true);
+                    if (click_result == 1) { // Back button was clicked
+                      printf("Back button clicked, returning to main menu...\n");
+                      set_game_state(STATE_MAIN_MENU);
+                      if (draw_current_page(mouse_x, mouse_y) != 0) {
+                        printf("Error drawing main menu\n");
+                      }
+                    }
+                  } else if (get_game_state() == STATE_SP_ENTER_INITIALS) {
+                    int click_result = handle_initials_click(mouse_x, mouse_y, true);
+                    if (click_result == 1) { // Done button was clicked
+                      printf("Done button clicked, starting countdown...\n");
+                      jogo_t *game = get_current_game();
+                      game_start_countdown(game);
+                      set_game_state(STATE_SP_COUNTDOWN);
+                      if (draw_current_page(mouse_x, mouse_y) != 0) {
+                        printf("Error drawing countdown page\n");
+                      }
                     }
                   }
                 }
@@ -209,6 +308,13 @@ int (proj_main_loop)(int argc, char* argv[])
           break;
       }
     }
+    
+    /* No longer need countdown logic here - moved to timer interrupt */
+  }
+  
+  /* Unsubscribe timer interrupts */
+  if (timer_unsubscribe_int() != 0) {
+    printf("Error unsubscribing timer interrupts\n");
   }
   
   /* Unsubscribe mouse interrupts */
