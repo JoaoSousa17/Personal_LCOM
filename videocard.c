@@ -2,6 +2,7 @@
 #include "font.h"
 #include "leaderboard.h"
 #include "letter_rain.h"
+#include "fight_list.h"
 #include "game.h"
 #include <machine/int86.h>
 #include <lcom/vbe.h>
@@ -524,7 +525,9 @@ int draw_current_page(uint16_t mouse_x, uint16_t mouse_y) {
     case STATE_SP_LETTER_RAIN:
       return game_draw_letter_rain(get_current_game()); /* No mouse support */
     case STATE_SP_PLAYING:
-      return draw_countdown_page(); /* No mouse support - will be replaced with game page */
+      return game_draw_fight_list(get_current_game()); /* No mouse support - Fight List game */
+    case STATE_SP_FINISHED:
+      return draw_game_finished_page(mouse_x, mouse_y);
     default:
       return draw_main_page_with_hover(mouse_x, mouse_y);
   }
@@ -725,4 +728,158 @@ int draw_init_mp_game() {
   if (draw_string_scaled(100, 400, "Press ESC to go back", white, 1) != 0) return 1;
   
   return 0;
+}
+
+int draw_game_finished_page(uint16_t mouse_x, uint16_t mouse_y) {
+  /* Define colors */
+  uint32_t bg_color = 0x1a1a2e;      /* Dark blue background */
+  uint32_t orange = 0xff6b35;        /* Orange for title */
+  uint32_t white = 0xffffff;         /* White for text */
+  uint32_t green = 0x00ff88;         /* Green for score */
+  uint32_t yellow = 0xffd700;        /* Yellow for buttons */
+  uint32_t light_blue = 0x16537e;    /* Light blue for accent */
+  
+  /* Clear screen */
+  if (clear_screen(bg_color) != 0) return 1;
+  
+  /* Get game data */
+  jogo_t *game = get_current_game();
+  
+  /* Draw title */
+  const char *title = "JOGO TERMINADO!";
+  uint8_t title_scale = 4;
+  uint16_t title_width = strlen(title) * 8 * title_scale;
+  uint16_t title_x = (get_h_res() - title_width) / 2;
+  uint16_t title_y = 60;
+  
+  if (draw_string_scaled(title_x, title_y, title, orange, title_scale) != 0) return 1;
+  
+  /* Draw decorative line */
+  uint16_t line_width = title_width + 40;
+  uint16_t line_x = (get_h_res() - line_width) / 2;
+  uint16_t line_y = title_y + title_scale * 8 + 15;
+  
+  for (uint16_t i = 0; i < line_width; i++) {
+    for (uint8_t thickness = 0; thickness < 3; thickness++) {
+      if (draw_pixel(line_x + i, line_y + thickness, light_blue) != 0) return 1;
+    }
+  }
+  
+  /* Draw player info */
+  char player_info[100];
+  snprintf(player_info, sizeof(player_info), "Jogador: %s", game->nome);
+  uint16_t player_x = (get_h_res() - strlen(player_info) * 8 * 2) / 2;
+  if (draw_string_scaled(player_x, line_y + 60, player_info, white, 2) != 0) return 1;
+  
+  /* Draw final score */
+  char score_info[100];
+  snprintf(score_info, sizeof(score_info), "Pontuacao Final: %d pontos", game->pontuacao);
+  uint16_t score_x = (get_h_res() - strlen(score_info) * 8 * 3) / 2;
+  if (draw_string_scaled(score_x, line_y + 100, score_info, green, 3) != 0) return 1;
+  
+  /* Draw game stats */
+  char words_info[100];
+  snprintf(words_info, sizeof(words_info), "Palavras encontradas: %d", game->fight_list_game.count_respondidas);
+  uint16_t words_x = (get_h_res() - strlen(words_info) * 8 * 2) / 2;
+  if (draw_string_scaled(words_x, line_y + 160, words_info, white, 2) != 0) return 1;
+  
+  /* Draw completion message */
+  const char *completion_msg;
+  if (game->fight_list_game.todas_encontradas) {
+    completion_msg = "Parabens! Encontraste todas as palavras!";
+  } else {
+    completion_msg = "Tempo esgotado! Tenta novamente para melhorar.";
+  }
+  
+  uint16_t msg_x = (get_h_res() - strlen(completion_msg) * 8 * 1) / 2;
+  if (draw_string_scaled(msg_x, line_y + 200, completion_msg, yellow, 1) != 0) return 1;
+  
+  /* Draw buttons */
+  uint16_t button_y = line_y + 250;
+  uint16_t button_width = 200;
+  uint16_t button_height = 50;
+  uint16_t button_spacing = 50;
+  
+  /* Play Again button */
+  uint16_t play_again_x = (get_h_res() / 2) - button_width - (button_spacing / 2);
+  bool play_again_hovered = (mouse_x >= play_again_x && mouse_x <= play_again_x + button_width &&
+                            mouse_y >= button_y && mouse_y <= button_y + button_height);
+  
+  if (draw_menu_option_hover(play_again_x, button_y, button_width, button_height,
+                            "JOGAR NOVAMENTE", white, yellow, 2, play_again_hovered) != 0) return 1;
+  
+  /* Main Menu button */
+  uint16_t main_menu_x = (get_h_res() / 2) + (button_spacing / 2);
+  bool main_menu_hovered = (mouse_x >= main_menu_x && mouse_x <= main_menu_x + button_width &&
+                           mouse_y >= button_y && mouse_y <= button_y + button_height);
+  
+  if (draw_menu_option_hover(main_menu_x, button_y, button_width, button_height,
+                            "MENU PRINCIPAL", white, yellow, 2, main_menu_hovered) != 0) return 1;
+  
+  /* Draw instructions */
+  const char *instruction = "Press ESC para menu principal";
+  uint16_t instr_x = (get_h_res() - strlen(instruction) * 8 * 1) / 2;
+  if (draw_string_scaled(instr_x, get_v_res() - 60, instruction, white, 1) != 0) return 1;
+  
+  /* Add decorative corners */
+  uint16_t corner_size = 30;
+  if (draw_rectangle_border(20, 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
+  if (draw_rectangle_border(get_h_res() - corner_size - 20, 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
+  if (draw_rectangle_border(20, get_v_res() - corner_size - 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
+  if (draw_rectangle_border(get_h_res() - corner_size - 20, get_v_res() - corner_size - 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
+  
+  /* Draw mouse cursor */
+  if (draw_mouse_cursor(mouse_x, mouse_y, 0xffffff) != 0) return 1;
+  
+  return 0;
+}
+
+int handle_game_finished_click(uint16_t x, uint16_t y, bool left_click) {
+  if (!left_click) return -1;  /* Only handle left clicks */
+  
+  uint16_t button_y = 60 + 4 * 8 + 15 + 250; /* title_y + title_height + line spacing + button offset */
+  uint16_t button_width = 200;
+  uint16_t button_height = 50;
+  uint16_t button_spacing = 50;
+  
+  /* Play Again button */
+  uint16_t play_again_x = (get_h_res() / 2) - button_width - (button_spacing / 2);
+  if (x >= play_again_x && x <= play_again_x + button_width &&
+      y >= button_y && y <= button_y + button_height) {
+    return 1; /* Play again clicked */
+  }
+  
+  /* Main Menu button */
+  uint16_t main_menu_x = (get_h_res() / 2) + (button_spacing / 2);
+  if (x >= main_menu_x && x <= main_menu_x + button_width &&
+      y >= button_y && y <= button_y + button_height) {
+    return 2; /* Main menu clicked */
+  }
+  
+  return -1; /* No action */
+}
+
+int game_draw_fight_list(jogo_t *game) {
+  if (game == NULL || game->state != GAME_STATE_PLAYING)
+    return 1;
+  
+  /* Draw the fight list game */
+  return fight_list_draw(&game->fight_list_game);
+}
+
+int game_draw_letter_rain(jogo_t *game) {
+    if (game == NULL || game->state != GAME_STATE_LETTER_RAIN)
+        return 1;
+    
+    // Draw the letter rain game
+    if (letter_rain_draw(&game->letter_rain_game) != 0)
+        return 1;
+    
+    // Draw game info
+    char info[100];
+    sprintf(info, "Jogador: %s", game->nome);
+    if (draw_string_scaled(get_h_res() - 200, 20, info, 0xFFD700, 2) != 0)
+        return 1;
+    
+    return 0;
 }

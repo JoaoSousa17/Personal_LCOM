@@ -2,7 +2,9 @@
 #include "videocard.h"
 #include "font.h"
 #include "letter_rain.h"
+#include "fight_list.h"
 #include <string.h>
+#include <stdio.h>
 #include <ctype.h>
 
 /* Global game instance */
@@ -460,20 +462,20 @@ int game_update_letter_rain(jogo_t *game) {
 }
 
 int game_draw_letter_rain(jogo_t *game) {
-  if (game == NULL || game->state != GAME_STATE_LETTER_RAIN)
-    return 1;
-  
-  /* Draw the letter rain game */
-  if (letter_rain_draw(&game->letter_rain_game) != 0)
-    return 1;
-  
-  /* Draw game info */
-  char info[100];
-  sprintf(info, "Jogador: %s", game->nome);
-  if (draw_string_scaled(get_h_res() - 200, 20, info, 0xFFD700, 2) != 0)
-    return 1;
-  
-  return 0;
+    if (game == NULL || game->state != GAME_STATE_LETTER_RAIN)
+        return 1;
+    
+    // Draw the letter rain game
+    if (letter_rain_draw(&game->letter_rain_game) != 0)
+        return 1;
+    
+    // Draw game info
+    char info[100];
+    sprintf(info, "Jogador: %s", game->nome);
+    if (draw_string_scaled(get_h_res() - 200, 20, info, 0xFFD700, 2) != 0)
+        return 1;
+    
+    return 0;
 }
 
 int game_handle_letter_rain_input(jogo_t *game, uint8_t scancode) {

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "letter_rain.h"
+#include "fight_list.h"
 
 /* Maximum length for player initials */
 #define MAX_INITIALS 4

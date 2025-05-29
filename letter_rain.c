@@ -3,7 +3,9 @@
 #include "videocard.h"
 #include "font.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
+
 // Removido #include <time.h> pois não está disponível no MINIX
 
 /* Scancode definitions */

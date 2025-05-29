@@ -2,7 +2,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdlib.h>
-#include "jogo.h"
+#include "gameLogic.h"
 #include "dicionarios.h"
 
 int TestMode = 0;
@@ -53,7 +53,8 @@ int distanciaLevenshtein(const char* s1, const char* s2) {
 
 int verificarEntrada(Categoria* categoria, char respondidas[][MAX_ENTRADA], int* respondidasCount, const char* entradaOriginal) {
     char entrada[MAX_ENTRADA];
-    strncpy(entrada, entradaOriginal, MAX_ENTRADA);
+    strncpy(entrada, entradaOriginal, MAX_ENTRADA - 1);
+    entrada[MAX_ENTRADA - 1] = '\0';
 
     for (int i = 0; entrada[i]; i++)
         entrada[i] = tolower((unsigned char)entrada[i]);
@@ -61,7 +62,8 @@ int verificarEntrada(Categoria* categoria, char respondidas[][MAX_ENTRADA], int*
 
     for (int i = 0; i < *respondidasCount; i++) {
         char comparada[MAX_ENTRADA];
-        strncpy(comparada, respondidas[i], MAX_ENTRADA);
+        strncpy(comparada, respondidas[i], MAX_ENTRADA - 1);
+        comparada[MAX_ENTRADA - 1] = '\0';
         removerAcentos(comparada);
         if (strcmp(comparada, entrada) == 0)
             return -1;
@@ -69,17 +71,63 @@ int verificarEntrada(Categoria* categoria, char respondidas[][MAX_ENTRADA], int*
 
     for (int i = 0; i < categoria->totalPontuacoes; i++) {
         char correta[MAX_ENTRADA];
-        strncpy(correta, categoria->pontuacoes[i].palavra, MAX_ENTRADA);
+        strncpy(correta, categoria->pontuacoes[i].palavra, MAX_ENTRADA - 1);
+        correta[MAX_ENTRADA - 1] = '\0';
         for (int j = 0; correta[j]; j++)
             correta[j] = tolower((unsigned char)correta[j]);
         removerAcentos(correta);
 
         if (distanciaLevenshtein(entrada, correta) <= 1) {
-            strncpy(respondidas[*respondidasCount], categoria->pontuacoes[i].palavra, MAX_ENTRADA);
+            strncpy(respondidas[*respondidasCount], categoria->pontuacoes[i].palavra, MAX_ENTRADA - 1);
+            respondidas[*respondidasCount][MAX_ENTRADA - 1] = '\0';
             (*respondidasCount)++;
             return categoria->pontuacoes[i].pontuacao;
         }
     }
 
     return 0;
+}
+
+int verificarEntradaComLetra(Categoria* categoria, char respondidas[][MAX_ENTRADA], int* respondidasCount, const char* entradaOriginal, char letraObrigatoria) {
+    /* Primeiro verificar se a palavra contém a letra obrigatória */
+    if (!palavraContemLetra(entradaOriginal, letraObrigatoria)) {
+        return 0; /* Palavra não contém a letra obrigatória */
+    }
+    
+    /* Se contém a letra, usar a verificação normal */
+    return verificarEntrada(categoria, respondidas, respondidasCount, entradaOriginal);
+}
+
+int palavraContemLetra(const char* palavra, char letra) {
+    if (palavra == NULL) return 0;
+    
+    char letraLower = tolower((unsigned char)letra);
+    char letraUpper = toupper((unsigned char)letra);
+    
+    /* Criar cópia da palavra para processar acentos */
+    char palavraCopia[MAX_ENTRADA];
+    strncpy(palavraCopia, palavra, MAX_ENTRADA - 1);
+    palavraCopia[MAX_ENTRADA - 1] = '\0';
+    
+    /* Converter para minúsculas e remover acentos */
+    for (int i = 0; palavraCopia[i]; i++) {
+        palavraCopia[i] = tolower((unsigned char)palavraCopia[i]);
+    }
+    removerAcentos(palavraCopia);
+    
+    /* Verificar se a letra (também em minúscula e sem acentos) está presente */
+    char letraParaVerificar = tolower((unsigned char)letra);
+    
+    /* Remover acentos da letra se necessário */
+    char letraSemAcento[2] = {letraParaVerificar, '\0'};
+    removerAcentos(letraSemAcento);
+    letraParaVerificar = letraSemAcento[0];
+    
+    for (int i = 0; palavraCopia[i] != '\0'; i++) {
+        if (palavraCopia[i] == letraParaVerificar) {
+            return 1; /* Letra encontrada */
+        }
+    }
+    
+    return 0; /* Letra não encontrada */
 }
