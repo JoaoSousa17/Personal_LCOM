@@ -7,9 +7,9 @@
 
 #define MAX_FALLING_LETTERS 10
 #define BOARD_WIDTH 100
-#define BOARD_HEIGHT 60
+#define BOARD_HEIGHT 25  /* Reduzido para metade */
 #define LETTER_FALL_SPEED 2
-#define BOARD_SPEED 5
+#define BOARD_SPEED 35   /* Muito mais rápido */
 
 /**
  * @brief Letter probabilities (multiplied by 100 for integer math)
@@ -41,7 +41,6 @@ typedef struct {
     int x, y;           // Board position
     int width, height;  // Board dimensions
     Sprite *sprite;     // Board sprite
-    int missed_count;   // Number of letters that hit the board
 } board_t;
 
 /**
@@ -50,10 +49,11 @@ typedef struct {
 typedef struct {
     falling_letter_t letters[MAX_FALLING_LETTERS];
     board_t board;
-    char caught_letter;     // The letter that was caught
+    char caught_letter;     // The letter that was caught twice
     bool game_over;         // Game over flag
     uint32_t frame_counter; // For timing letter spawning
     uint32_t spawn_rate;    // Frames between letter spawns
+    int letter_counters[26]; // Counter for each letter (A=0, B=1, ..., Z=25)
 } letter_rain_t;
 
 /**

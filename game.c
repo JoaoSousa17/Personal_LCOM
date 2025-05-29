@@ -96,8 +96,7 @@ bool game_update_countdown(jogo_t *game) {
       game->countdown--;
       return false; /* Still counting down, number changed */
     } else {
-      /* countdown já está em 0, já mostrámos GO por 1 segundo */
-      /* NÃO muda o estado aqui - deixa o código principal fazer isso */
+      /* countdown reached 0, GO phase finished */
       return true; /* Countdown finished, ready to move to letter rain */
     }
   }
@@ -406,15 +405,33 @@ int game_start_letter_rain(jogo_t *game) {
   }
   
   printf("Initializing letter rain game...\n");
+  printf("Game state before: %d\n", game->state);
+  
+  /* Limpa o estado anterior do letter rain game */
+  memset(&game->letter_rain_game, 0, sizeof(letter_rain_t));
   
   /* Initialize the letter rain mini-game */
-  if (letter_rain_init(&game->letter_rain_game) != 0) {
-    printf("game_start_letter_rain: letter_rain_init failed\n");
-    return 1;
+  int init_result = letter_rain_init(&game->letter_rain_game);
+  printf("letter_rain_init returned: %d\n", init_result);
+  
+  if (init_result != 0) {
+    printf("game_start_letter_rain: letter_rain_init failed with code %d\n", init_result);
+    
+    /* Tenta uma segunda inicialização */
+    printf("Attempting second initialization...\n");
+    memset(&game->letter_rain_game, 0, sizeof(letter_rain_t));
+    init_result = letter_rain_init(&game->letter_rain_game);
+    
+    if (init_result != 0) {
+      printf("Second initialization also failed with code %d\n", init_result);
+      return 1;
+    }
   }
   
   printf("Letter rain initialized successfully\n");
   game->state = GAME_STATE_LETTER_RAIN;
+  printf("Game state after: %d\n", game->state);
+  
   return 0;
 }
 
@@ -452,15 +469,8 @@ int game_draw_letter_rain(jogo_t *game) {
   
   /* Draw game info */
   char info[100];
-  snprintf(info, sizeof(info), "Jogador: %s", game->nome);
-  if (draw_string_scaled(20, 60, info, 0xFFD700, 2) != 0)
-    return 1;
-  
-  /* Draw instructions */
-  if (draw_string_scaled(20, get_v_res() - 80, "Apanha uma letra para comecar o jogo!", 0x00FF88, 1) != 0)
-    return 1;
-  
-  if (draw_string_scaled(20, get_v_res() - 60, "Nao deixes cair 2 letras na borda!", 0xFF4444, 1) != 0)
+  sprintf(info, "Jogador: %s", game->nome);
+  if (draw_string_scaled(get_h_res() - 200, 20, info, 0xFFD700, 2) != 0)
     return 1;
   
   return 0;

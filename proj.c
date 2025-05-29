@@ -135,85 +135,93 @@ int (proj_main_loop)(int argc, char* argv[])
       switch (_ENDPOINT_P(msg.m_source)) {
         case HARDWARE:
           // Parte relevante do proj.c - dentro do main loop, na secção do timer interrupt:
-          if (msg.m_notify.interrupts & BIT(timer_bit_no)) {
-            /* Handle timer interrupt */
-            timer_int_handler();
-            
-            /* Handle countdown updates for single player mode */
-            if (get_game_state() == STATE_SP_COUNTDOWN) {
-              jogo_t *game = get_current_game();
-              bool countdown_finished = game_update_countdown(game);
-              
-              if (countdown_finished) {
-                /* Countdown finished, move to letter rain state */
-                printf("Countdown finished, starting letter rain...\n");
-                
-                /* Primeiro inicializa o letter rain */
-                if (game_start_letter_rain(game) != 0) {
-                  printf("Error starting letter rain mini-game\n");
-                  /* Em caso de erro, volta ao menu principal */
-                  set_game_state(STATE_MAIN_MENU);
-                  uint16_t mouse_x = mouse_get_x();
-                  uint16_t mouse_y = mouse_get_y();
-                  if (draw_current_page(mouse_x, mouse_y) != 0) {
-                    printf("Error drawing main menu\n");
-                  }
-                } else {
-                  /* Letter rain inicializado com sucesso */
-                  printf("Letter rain initialized successfully\n");
-                  set_game_state(STATE_SP_LETTER_RAIN);
-                  
-                  /* Força redesenho da página */
-                  uint16_t mouse_x = mouse_get_x();
-                  uint16_t mouse_y = mouse_get_y();
-                  if (draw_current_page(mouse_x, mouse_y) != 0) {
-                    printf("Error drawing letter rain page\n");
-                  }
-                }
-              } else {
-                /* Ainda na contagem regressiva, mas pode ter mudado o número */
-                /* Redesenha a página para mostrar a mudança */
-                static uint8_t last_countdown_value = 255; /* Initialize to invalid value */
-                if (last_countdown_value != game->countdown) {
-                  last_countdown_value = game->countdown;
-                  printf("Countdown: %d\n", game->countdown);
-                  uint16_t mouse_x = mouse_get_x();
-                  uint16_t mouse_y = mouse_get_y();
-                  if (draw_current_page(mouse_x, mouse_y) != 0) {
-                    printf("Error redrawing countdown page\n");
-                  }
-                }
-              }
-            }
-            
-            /* Handle letter rain updates */
-            if (get_game_state() == STATE_SP_LETTER_RAIN) {
-              jogo_t *game = get_current_game();
-              int lr_result = game_update_letter_rain(game);
-              if (lr_result == 1) {
-                /* Letter rain finished */
-                if (game->letra != 0) {
-                  printf("Letter rain finished, caught letter: %c\n", game->letra);
-                  set_game_state(STATE_SP_PLAYING);
-                } else {
-                  printf("Letter rain failed, game over\n");
-                  set_game_state(STATE_MAIN_MENU);
-                }
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error drawing next page\n");
-                }
-              } else {
-                /* Redraw letter rain a cada frame para animação */
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error redrawing letter rain page\n");
-                }
-              }
-            }
-          }
+
+if (msg.m_notify.interrupts & BIT(timer_bit_no)) {
+  /* Handle timer interrupt */
+  timer_int_handler();
+  
+  /* Handle countdown updates for single player mode */
+  if (get_game_state() == STATE_SP_COUNTDOWN) {
+    jogo_t *game = get_current_game();
+    bool countdown_finished = game_update_countdown(game);
+    
+    if (countdown_finished) {
+      /* Countdown finished, move to letter rain state */
+      printf("Countdown finished, starting letter rain...\n");
+      
+      /* Debug: Check game state before initialization */
+      printf("Game state before letter rain init: %d\n", game->state);
+      
+      /* Primeiro inicializa o letter rain */
+      int lr_init_result = game_start_letter_rain(game);
+      printf("Letter rain init result: %d\n", lr_init_result);
+      
+      if (lr_init_result != 0) {
+        printf("Error starting letter rain mini-game (code: %d)\n", lr_init_result);
+        printf("Attempting to continue anyway...\n");
+        
+        /* Tenta inicializar manualmente em caso de erro */
+        game->state = GAME_STATE_LETTER_RAIN;
+        set_game_state(STATE_SP_LETTER_RAIN);
+        
+        printf("Forced state change to letter rain\n");
+      } else {
+        /* Letter rain inicializado com sucesso */
+        printf("Letter rain initialized successfully\n");
+        set_game_state(STATE_SP_LETTER_RAIN);
+      }
+      
+      /* Força redesenho da página */
+      uint16_t mouse_x = mouse_get_x();
+      uint16_t mouse_y = mouse_get_y();
+      if (draw_current_page(mouse_x, mouse_y) != 0) {
+        printf("Error drawing letter rain page\n");
+      }
+      
+    } else {
+      /* Ainda na contagem regressiva, mas pode ter mudado o número */
+      /* Redesenha a página para mostrar a mudança */
+      static uint8_t last_countdown_value = 255; /* Initialize to invalid value */
+      if (last_countdown_value != game->countdown) {
+        last_countdown_value = game->countdown;
+        printf("Countdown: %d\n", game->countdown);
+        uint16_t mouse_x = mouse_get_x();
+        uint16_t mouse_y = mouse_get_y();
+        if (draw_current_page(mouse_x, mouse_y) != 0) {
+          printf("Error redrawing countdown page\n");
+        }
+      }
+    }
+  }
+  
+  /* Handle letter rain updates */
+  if (get_game_state() == STATE_SP_LETTER_RAIN) {
+    jogo_t *game = get_current_game();
+    int lr_result = game_update_letter_rain(game);
+    if (lr_result == 1) {
+      /* Letter rain finished */
+      if (game->letra != 0) {
+        printf("Letter rain finished, caught letter: %c\n", game->letra);
+        set_game_state(STATE_SP_PLAYING);
+      } else {
+        printf("Letter rain failed, game over\n");
+        set_game_state(STATE_MAIN_MENU);
+      }
+      uint16_t mouse_x = mouse_get_x();
+      uint16_t mouse_y = mouse_get_y();
+      if (draw_current_page(mouse_x, mouse_y) != 0) {
+        printf("Error drawing next page\n");
+      }
+    } else {
+      /* Redraw letter rain a cada frame para animação */
+      uint16_t mouse_x = mouse_get_x();
+      uint16_t mouse_y = mouse_get_y();
+      if (draw_current_page(mouse_x, mouse_y) != 0) {
+        printf("Error redrawing letter rain page\n");
+      }
+    }
+  }
+}
           
           if (msg.m_notify.interrupts & BIT(kbd_bit_no)) {
             /* Handle keyboard interrupt */
