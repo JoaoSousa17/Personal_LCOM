@@ -520,11 +520,13 @@ int draw_current_page(uint16_t mouse_x, uint16_t mouse_y) {
     case STATE_SP_ENTER_INITIALS:
       return draw_enter_initials_page(mouse_x, mouse_y);
     case STATE_SP_COUNTDOWN:
-      return draw_countdown_page(); /* No mouse support */
+      return draw_countdown_page();
     case STATE_SP_LETTER_RAIN:
-      return game_draw_letter_rain(get_current_game()); /* No mouse support */
+      return game_draw_letter_rain(get_current_game());
+    case STATE_SP_SINGLEPLAYER:
+      return game_draw_singleplayer(get_current_game());
     case STATE_SP_PLAYING:
-      return draw_countdown_page(); /* No mouse support - will be replaced with game page */
+      return draw_countdown_page(); /* Will be replaced */
     default:
       return draw_main_page_with_hover(mouse_x, mouse_y);
   }
