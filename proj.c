@@ -1,548 +1,497 @@
 #include <lcom/lcf.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdbool.h>
-#include "videocard.h"
+
 #include "keyboard.h"
 #include "mouse.h"
-#include "font.h"
-#include "leaderboard.h"
+#include "timer.h"
+#include "videocard.h"
 #include "game.h"
-#include "utils.h"
 #include "singleplayer.h"
 
-uint16_t mode;
-uint8_t kbd_bit_no = 0;
-uint8_t mouse_bit_no = 0;
-uint8_t timer_bit_no = 0;
+/* Game state management */
+typedef enum {
+    STATE_MAIN_MENU,
+    STATE_SINGLE_PLAYER,
+    STATE_MULTIPLAYER, 
+    STATE_INSTRUCTIONS,
+    STATE_SP_ENTER_INITIALS,
+    STATE_SP_COUNTDOWN,
+    STATE_SP_LETTER_RAIN,
+    STATE_SP_PLAYING,
+    STATE_FORCA  /* Novo estado para o minigame da forca */
+} program_state_t;
 
-// Define some colors for different bit depths
-#define COLOR_WHITE 0xFFFFFF
-#define COLOR_RED   0xFF0000
-#define COLOR_GREEN 0x00FF00
-#define COLOR_BLUE  0x0000FF
-#define COLOR_BLACK 0x000000
+/* Global state variables */
+static program_state_t current_state = STATE_MAIN_MENU;
+static jogo_t main_game;
+static bool program_initialized = false;
 
-int main(int argc, char *argv[])
-{
-  // sets the language of LCF messages (can be either EN-US or PT-PT)
-  lcf_set_language("EN-US");
+/* Interrupt variables */
+static int timer_irq_set, kbd_irq_set, mouse_irq_set;
 
-  // enables to log function invocations that are being "wrapped" by LCF
-  // [comment this out if you don't want/need it]
-  lcf_trace_calls("/home/lcom/labs/grupo_2leic10_2/proj/src/trace.txt");
+/* Function prototypes */
+void set_game_state(program_state_t new_state);
+program_state_t get_game_state(void);
+jogo_t* get_current_game(void);
+int handle_state_transitions(void);
+int draw_current_state(void);
 
-  // enables to save the output of printf function calls on a file
-  // [comment this out if you don't want/need it]
-  lcf_log_output("/home/lcom/labs/grupo_2leic10_2/proj/src/output.txt");
+/* Key scancodes */
+#define ESC_BREAKCODE 0x81
+#define ENTER_MAKE 0x1C
 
-  // handles control over to LCF
-  // [LCF handles command line arguments and invokes the right function]
-  if (lcf_start(argc, argv))
-    return 1;
+/* Timer frequency for 60 FPS */
+#define TIMER_FREQUENCY 60
 
-  // Run our main loop here, before lcf_cleanup
-  int result = proj_main_loop(argc, argv);
+int main(int argc, char *argv[]) {
+    /* Set language and logging */
+    lcf_set_language("EN-US");
+    lcf_trace_calls("/home/lcom/labs/proj/trace.txt");
+    lcf_log_output("/home/lcom/labs/proj/output.txt");
 
-  // LCF clean up tasks
-  // [must be the last statement before return]
-  lcf_cleanup();
+    /* Start LCF framework */
+    if (lcf_start(argc, argv)) {
+        printf("Failed to start LCF framework\n");
+        return 1;
+    }
 
-  return result;
+    /* Cleanup and exit */
+    lcf_cleanup_and_exit(); 
+    return 0;
 }
 
-int (proj_main_loop)(int argc, char* argv[])
-{ 
-  /* Available modes:  */
-  //mode = 0x105;
-  //mode = 0x110;
-  mode = 0x115;
-  //mode = 0x11A;
-  //mode = 0x14C;
-  /* ------------------ */
-  /* 
-  To choose a different mode just uncomment the mode you wish to use, comment the previous
-  one and recompile the code.  
-  */
-  /* ------------------ */
-  
-  /* Initialize graphics mode */
-  if (set_graphics_mode(mode) != 0) {
-    printf("Error setting graphics mode\n");
-    return 1;
-  }
-  
-  /* Map VRAM */
-  if (map_vram(mode) != 0) {
-    printf("Error mapping VRAM\n");
-    return 1;
-  }
-  
-  printf("Graphics mode 0x%X initialized successfully\n", mode);
-  printf("Resolution: %dx%d, %d bits per pixel\n", get_h_res(), get_v_res(), get_bits_per_pixel());
-  
-  /* Subscribe keyboard interrupts */
-  if (kbd_subscribe_int(&kbd_bit_no) != 0) {
-    printf("Error subscribing keyboard interrupts\n");
-    exit_graphics_mode();
-    return 1;
-  }
-  
-  /* Subscribe mouse interrupts */
-  if (mouse_enable(&mouse_bit_no) != 0) {
-    printf("Error subscribing mouse interrupts\n");
-    kbd_unsubscribe_int();
-    exit_graphics_mode();
-    return 1;
-  }
-  
-  /* Subscribe timer interrupts */
-  if (timer_subscribe_int(&timer_bit_no) != 0) {
-    printf("Error subscribing timer interrupts\n");
-    mouse_disable();
-    kbd_unsubscribe_int();
-    exit_graphics_mode();
-    return 1;
-  }
-  
-  /* Initialize font system */
-  font_init();
-  
-  /* Set initial state and draw the main page */
-  set_game_state(STATE_MAIN_MENU);
-  if (draw_current_page(400, 300) != 0) {
-    printf("Error drawing initial page\n");
-    exit_graphics_mode();
-    kbd_unsubscribe_int();
-    return 1;
-  }
-  
-  int ipc_status;
-  message msg;
-  bool running = true;
-  
-  /* Main loop - wait for ESC key to exit */
-  printf("Press ESC to exit graphics mode\n");
-  
-  while (running) {
-    /* Wait for interrupt */
-    if (driver_receive(ANY, &msg, &ipc_status) != 0) {
-      printf("Error receiving message\n");
-      continue;
+int (proj_main_loop)(int argc, char *argv[]) {
+    printf("=== Starting Minix Labs Project ===\n");
+    printf("Initializing graphics and game systems...\n");
+
+    /* Initialize video mode (1024x768, 16-bit color) */
+    if (set_graphics_mode(0x117) != 0) {
+        printf("ERROR: Failed to set graphics mode 0x117\n");
+        return 1;
+    }
+    printf("Graphics mode 0x117 (1024x768) initialized successfully\n");
+
+    /* Subscribe to interrupts - ORDER MATTERS! */
+    uint8_t timer_bit, kbd_bit, mouse_bit;
+    
+    /* Timer subscription */
+    if (timer_subscribe_int(&timer_bit) != 0) {
+        printf("ERROR: Failed to subscribe timer interrupts\n");
+        exit_graphics_mode();
+        return 1;
+    }
+    printf("Timer interrupts subscribed successfully (bit %d)\n", timer_bit);
+    
+    /* Keyboard subscription */
+    if (kbd_subscribe_int(&kbd_bit) != 0) {
+        printf("ERROR: Failed to subscribe keyboard interrupts\n");
+        timer_unsubscribe_int();
+        exit_graphics_mode();
+        return 1;
+    }
+    printf("Keyboard interrupts subscribed successfully (bit %d)\n", kbd_bit);
+    
+    /* Mouse subscription */
+    if (mouse_subscribe_int(&mouse_bit) != 0) {
+        printf("ERROR: Failed to subscribe mouse interrupts\n");
+        kbd_unsubscribe_int();
+        timer_unsubscribe_int();
+        exit_graphics_mode();
+        return 1;
+    }
+    printf("Mouse interrupts subscribed successfully (bit %d)\n", mouse_bit);
+
+    /* Enable mouse data reporting */
+    if (mouse_enable_data_reporting() != 0) {
+        printf("WARNING: Failed to enable mouse data reporting\n");
+    } else {
+        printf("Mouse data reporting enabled\n");
+    }
+
+    /* Initialize main game structure */
+    if (game_init(&main_game) != 0) {
+        printf("ERROR: Failed to initialize main game structure\n");
+        mouse_unsubscribe_int();
+        kbd_unsubscribe_int();
+        timer_unsubscribe_int();
+        exit_graphics_mode();
+        return 1;
+    }
+    printf("Main game structure initialized successfully\n");
+
+    /* Set initial state and draw main menu */
+    current_state = STATE_MAIN_MENU;
+    program_initialized = true;
+    
+    if (draw_main_menu() != 0) {
+        printf("WARNING: Failed to draw initial main menu\n");
+    } else {
+        printf("Main menu drawn successfully\n");
+    }
+
+    printf("=== Entering main game loop ===\n");
+
+    /* Main game loop variables */
+    int ipc_status;
+    message msg;
+    int running = 1;
+    uint32_t frame_counter = 0;
+
+    while (running) {
+        /* Wait for interrupt */
+        if (driver_receive(ANY, &msg, &ipc_status) != 0) {
+            continue;
+        }
+
+        if (is_ipc_notify(ipc_status)) {
+            switch (_ENDPOINT_P(msg.m_source)) {
+                case HARDWARE:
+                    /* Timer interrupt - 60 FPS game loop */
+                    if (msg.m_notify.interrupts & BIT(timer_bit)) {
+                        timer_int_handler();
+                        frame_counter++;
+                        
+                        /* Update game logic based on current state */
+                        switch (current_state) {
+                            case STATE_SP_LETTER_RAIN:
+                            case STATE_SP_PLAYING:
+                                /* Update singleplayer game */
+                                if (game_update(&main_game) != 0) {
+                                    /* Game finished, return to menu */
+                                    printf("Singleplayer game finished, returning to menu\n");
+                                    game_cleanup(&main_game);
+                                    set_game_state(STATE_MAIN_MENU);
+                                    if (draw_current_state() != 0) {
+                                        printf("WARNING: Failed to draw state after game finish\n");
+                                    }
+                                } else {
+                                    /* Continue game, redraw */
+                                    if (game_draw(&main_game) != 0) {
+                                        printf("WARNING: Failed to draw singleplayer game\n");
+                                    }
+                                }
+                                break;
+                                
+                            case STATE_FORCA:
+                                /* Update forca mini-game */
+                                if (game_update(&main_game) != 0) {
+                                    /* Forca game finished, return to menu */
+                                    printf("Forca game finished, returning to menu\n");
+                                    game_cleanup(&main_game);
+                                    set_game_state(STATE_MAIN_MENU);
+                                    if (draw_current_state() != 0) {
+                                        printf("WARNING: Failed to draw state after forca finish\n");
+                                    }
+                                } else {
+                                    /* Continue forca game, redraw */
+                                    if (game_draw(&main_game) != 0) {
+                                        printf("WARNING: Failed to draw forca game\n");
+                                    }
+                                }
+                                break;
+                                
+                            case STATE_SP_COUNTDOWN:
+                                /* Handle countdown in singleplayer */
+                                if (singleplayer_update(&main_game.singleplayer_game) != 0) {
+                                    /* Countdown finished, start letter rain */
+                                    if (main_game.singleplayer_game.state == SP_STATE_LETTER_RAIN) {
+                                        set_game_state(STATE_SP_LETTER_RAIN);
+                                        if (game_start_letter_rain(&main_game) != 0) {
+                                            printf("WARNING: Failed to start letter rain\n");
+                                        }
+                                    } else if (main_game.singleplayer_game.state == SP_STATE_PLAYING) {
+                                        set_game_state(STATE_SP_PLAYING);
+                                    }
+                                }
+                                if (singleplayer_draw(&main_game.singleplayer_game) != 0) {
+                                    printf("WARNING: Failed to draw countdown\n");
+                                }
+                                break;
+                                
+                            default:
+                                /* Other states don't need timer updates */
+                                break;
+                        }
+                    }
+
+                    /* Keyboard interrupt */
+                    if (msg.m_notify.interrupts & BIT(kbd_bit)) {
+                        uint8_t scancode;
+                        if (kbd_read_scancode(&scancode) == 0) {
+                            /* Handle ESC key globally */
+                            if (scancode == ESC_BREAKCODE) {
+                                switch (current_state) {
+                                    case STATE_MAIN_MENU:
+                                        printf("ESC pressed in main menu - exiting program\n");
+                                        running = 0; /* Exit program */
+                                        break;
+                                        
+                                    case STATE_FORCA:
+                                        /* ESC exits forca game */
+                                        printf("ESC pressed - exiting forca game\n");
+                                        game_cleanup(&main_game);
+                                        set_game_state(STATE_MAIN_MENU);
+                                        if (draw_current_state() != 0) {
+                                            printf("WARNING: Failed to draw menu after forca exit\n");
+                                        }
+                                        break;
+                                        
+                                    default:
+                                        /* Return to main menu from any other state */
+                                        printf("ESC pressed - returning to main menu from state %d\n", current_state);
+                                        game_cleanup(&main_game);
+                                        set_game_state(STATE_MAIN_MENU);
+                                        if (draw_current_state() != 0) {
+                                            printf("WARNING: Failed to draw menu after ESC\n");
+                                        }
+                                        break;
+                                }
+                                continue;
+                            }
+
+                            /* Handle ENTER key for state transitions */
+                            if (scancode == ENTER_MAKE) {
+                                switch (current_state) {
+                                    case STATE_SP_COUNTDOWN:
+                                        /* Skip countdown with ENTER */
+                                        main_game.singleplayer_game.countdown_timer = 0;
+                                        break;
+                                        
+                                    default:
+                                        /* ENTER handled by individual games */
+                                        break;
+                                }
+                            }
+
+                            /* Handle state-specific keyboard input */
+                            switch (current_state) {
+                                case STATE_MAIN_MENU:
+                                    /* Main menu keyboard navigation (if implemented) */
+                                    break;
+                                    
+                                case STATE_SP_ENTER_INITIALS:
+                                    /* Handle initials input */
+                                    if (singleplayer_handle_input(&main_game.singleplayer_game, scancode) == 0) {
+                                        /* Check if state changed to countdown */
+                                        if (main_game.singleplayer_game.state == SP_STATE_COUNTDOWN) {
+                                            set_game_state(STATE_SP_COUNTDOWN);
+                                        }
+                                    }
+                                    /* Redraw initials screen */
+                                    if (singleplayer_draw(&main_game.singleplayer_game) != 0) {
+                                        printf("WARNING: Failed to draw initials screen\n");
+                                    }
+                                    break;
+                                    
+                                case STATE_SP_LETTER_RAIN:
+                                case STATE_SP_PLAYING:
+                                    /* Handle game input */
+                                    game_handle_input(&main_game, scancode);
+                                    break;
+                                    
+                                case STATE_FORCA:
+                                    /* Handle forca input */
+                                    game_handle_input(&main_game, scancode);
+                                    /* Redraw forca game */
+                                    if (game_draw(&main_game) != 0) {
+                                        printf("WARNING: Failed to redraw forca after input\n");
+                                    }
+                                    break;
+                                    
+                                default:
+                                    /* Other states may handle input differently */
+                                    break;
+                            }
+                        }
+                    }
+
+                    /* Mouse interrupt */
+                    if (msg.m_notify.interrupts & BIT(mouse_bit)) {
+                        /* Only process mouse in menu states */
+                        if (current_state == STATE_MAIN_MENU || 
+                            current_state == STATE_INSTRUCTIONS ||
+                            current_state == STATE_MULTIPLAYER) {
+                            
+                            if (mouse_int_handler() == 0) {
+                                /* Check for menu clicks */
+                                int menu_result = mouse_check_menu_click();
+                                
+                                if (menu_result == 1) {
+                                    /* Quit selected */
+                                    printf("Quit selected via mouse - exiting program\n");
+                                    running = 0;
+                                    
+                                } else if (menu_result == 0) {
+                                    /* Valid menu option selected */
+                                    printf("Menu option selected, current state: %d\n", current_state);
+                                    
+                                    /* Handle state-specific drawing */
+                                    if (mouse_should_redraw_page()) {
+                                        if (handle_state_transitions() != 0) {
+                                            printf("WARNING: State transition failed\n");
+                                        }
+                                        mouse_clear_page_redraw_flag();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    break;
+                    
+                default:
+                    /* Ignore other message sources */
+                    break;
+            }
+        }
+    }
+
+    /* Cleanup and exit */
+    printf("=== Cleaning up and exiting ===\n");
+    
+    /* Cleanup game resources */
+    if (program_initialized) {
+        game_cleanup(&main_game);
+        printf("Game resources cleaned up\n");
     }
     
-    /* Check if it's a keyboard interrupt */
-    if (is_ipc_notify(ipc_status)) {
-      switch (_ENDPOINT_P(msg.m_source)) {
-        case HARDWARE:
-          if (msg.m_notify.interrupts & BIT(timer_bit_no)) {
-            /* Handle timer interrupt */
-            timer_int_handler();
-            
-            /* Handle countdown updates for single player mode */
-            if (get_game_state() == STATE_SP_COUNTDOWN) {
-              jogo_t *game = get_current_game();
-              bool countdown_finished = game_update_countdown(game);
-              
-              if (countdown_finished) {
-                /* Countdown finished, move to letter rain state */
-                printf("Countdown finished, starting letter rain...\n");
-                
-                /* Debug: Check game state before initialization */
-                printf("Game state before letter rain init: %d\n", game->state);
-                
-                /* Unsubscribe from keyboard IRQ before state transition */
-                printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
-                kbd_unsubscribe_int();
-                
-                /* Primeiro inicializa o letter rain */
-                int lr_init_result = game_start_letter_rain(game);
-                printf("Letter rain init result: %d\n", lr_init_result);
-                
-                if (lr_init_result != 0) {
-                  printf("Error starting letter rain mini-game (code: %d)\n", lr_init_result);
-                  printf("Attempting to continue anyway...\n");
-                  
-                  /* Tenta inicializar manualmente em caso de erro */
-                  game->state = GAME_STATE_LETTER_RAIN;
-                  set_game_state(STATE_SP_LETTER_RAIN);
-                  
-                  printf("Forced state change to letter rain\n");
-                } else {
-                  /* Letter rain inicializado com sucesso */
-                  printf("Letter rain initialized successfully\n");
-                  set_game_state(STATE_SP_LETTER_RAIN);
-                }
-                
-                /* Resubscribe to keyboard IRQ */
-                printf("Resubscribing keyboard IRQ...\n");
-                if (kbd_subscribe_int(&kbd_bit_no) != 0) {
-                  printf("Failed to resubscribe keyboard IRQ\n");
-                }
-                
-                /* Força redesenho da página */
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error drawing letter rain page\n");
-                }
-                
-              } else {
-                /* Ainda na contagem regressiva, mas pode ter mudado o número */
-                /* Redesenha a página para mostrar a mudança */
-                static uint8_t last_countdown_value = 255; /* Initialize to invalid value */
-                if (last_countdown_value != game->countdown) {
-                  last_countdown_value = game->countdown;
-                  printf("Countdown: %d\n", game->countdown);
-                  uint16_t mouse_x = mouse_get_x();
-                  uint16_t mouse_y = mouse_get_y();
-                  if (draw_current_page(mouse_x, mouse_y) != 0) {
-                    printf("Error redrawing countdown page\n");
-                  }
-                }
-              }
-            } else if (get_game_state() == STATE_SP_LETTER_RAIN) {
-              /* Handle letter rain updates */
-              jogo_t *game = get_current_game();
-              int lr_result = game_update_letter_rain(game);
-              if (lr_result == 1) {
-                /* Letter rain finished */
-                
-                /* Unsubscribe from keyboard IRQ before state transition */
-                printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
-                kbd_unsubscribe_int();
-                
-                if (game->letra != 0) {
-                  printf("Letter rain finished, caught letter: %c\n", game->letra);
-                  set_game_state(STATE_SP_PLAYING);
-                } else {
-                  printf("Letter rain failed, game over\n");
-                  set_game_state(STATE_MAIN_MENU);
-                }
-                
-                /* Resubscribe to keyboard IRQ */
-                printf("Resubscribing keyboard IRQ...\n");
-                if (kbd_subscribe_int(&kbd_bit_no) != 0) {
-                  printf("Failed to resubscribe keyboard IRQ\n");
-                }
-                
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error drawing next page\n");
-                }
-              } else {
-                /* Redraw letter rain a cada frame para animação */
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error redrawing letter rain page\n");
-                }
-              }
-            } else if (get_game_state() == STATE_SP_PLAYING) {
-              /* Update singleplayer game timer and redraw screen - this ensures timer updates continuously */
-              extern singleplayer_game_t sp_game; // Reference the static game instance from videocard.c
-              
-              /* Update game state regardless of user input */
-              singleplayer_update(&sp_game);
-              
-              /* Force a redraw of the screen to update timer display */
-              uint16_t mouse_x = mouse_get_x();
-              uint16_t mouse_y = mouse_get_y();
-              if (draw_current_page(mouse_x, mouse_y) != 0) {
-                printf("Error redrawing singleplayer page\n");
-              }
+    /* Disable mouse reporting */
+    if (mouse_disable_data_reporting() != 0) {
+        printf("WARNING: Failed to disable mouse data reporting\n");
+    }
+    
+    /* Unsubscribe from interrupts in reverse order */
+    if (mouse_unsubscribe_int() != 0) {
+        printf("WARNING: Failed to unsubscribe mouse interrupts\n");
+    } else {
+        printf("Mouse interrupts unsubscribed\n");
+    }
+    
+    if (kbd_unsubscribe_int() != 0) {
+        printf("WARNING: Failed to unsubscribe keyboard interrupts\n");
+    } else {
+        printf("Keyboard interrupts unsubscribed\n");
+    }
+    
+    if (timer_unsubscribe_int() != 0) {
+        printf("WARNING: Failed to unsubscribe timer interrupts\n");
+    } else {
+        printf("Timer interrupts unsubscribed\n");
+    }
+    
+    /* Exit graphics mode */
+    if (exit_graphics_mode() != 0) {
+        printf("WARNING: Failed to exit graphics mode cleanly\n");
+    } else {
+        printf("Graphics mode exited successfully\n");
+    }
+    
+    printf("=== Program terminated successfully ===\n");
+    return 0;
+}
+
+/* State management functions */
+void set_game_state(program_state_t new_state) {
+    if (new_state != current_state) {
+        printf("State transition: %d -> %d\n", current_state, new_state);
+        current_state = new_state;
+    }
+}
+
+program_state_t get_game_state(void) {
+    return current_state;
+}
+
+jogo_t* get_current_game(void) {
+    return &main_game;
+}
+
+/* Handle state transitions and drawing */
+int handle_state_transitions(void) {
+    switch (current_state) {
+        case STATE_SINGLE_PLAYER:
+            printf("Transitioning to single player mode\n");
+            if (draw_init_sp_game() != 0) {
+                printf("ERROR: Failed to draw SP init screen\n");
+                return 1;
             }
-          }
-          
-          if (msg.m_notify.interrupts & BIT(kbd_bit_no)) {
-            /* Handle keyboard interrupt */
-            kbd_int_handler();
-            
-            /* Check if ESC key was pressed */
-            if (is_esc_key()) {
-              game_state_t current = get_game_state();
-              if (current == STATE_SP_ENTER_INITIALS || current == STATE_SP_COUNTDOWN || 
-                  current == STATE_SP_LETTER_RAIN || current == STATE_SP_PLAYING) {
-                /* In single player mode, ESC goes back to main menu */
-                printf("Exiting single player mode...\n");
-                
-                /* Cleanup letter rain if active */
-                if (current == STATE_SP_LETTER_RAIN) {
-                  jogo_t *game = get_current_game();
-                  game_cleanup_letter_rain(game);
-                }
-                
-                /* Reset singleplayer state so a new category is chosen next time */
-                reset_singleplayer();
-                
+            /* Automatically transition to initials entry */
+            if (game_start_singleplayer(&main_game) != 0) {
+                printf("ERROR: Failed to start singleplayer game\n");
                 set_game_state(STATE_MAIN_MENU);
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error drawing main menu\n");
-                }
-              } else if (current != STATE_MAIN_MENU) {
-                /* Go back to main menu */
-                printf("Going back to main menu...\n");
+                return 1;
+            }
+            set_game_state(STATE_SP_ENTER_INITIALS);
+            break;
+            
+        case STATE_MULTIPLAYER:
+            printf("Transitioning to multiplayer mode\n");
+            if (draw_multiplayer_menu() != 0) {
+                printf("ERROR: Failed to draw multiplayer menu\n");
+                return 1;
+            }
+            break;
+            
+        case STATE_INSTRUCTIONS:
+            printf("Transitioning to instructions\n");
+            if (draw_instructions() != 0) {
+                printf("ERROR: Failed to draw instructions\n");
+                return 1;
+            }
+            break;
+            
+        case STATE_FORCA:
+            printf("Transitioning to forca easter egg\n");
+            if (game_start_forca(&main_game) != 0) {
+                printf("ERROR: Failed to start forca game\n");
                 set_game_state(STATE_MAIN_MENU);
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error drawing main menu\n");
-                }
-              } else {
-                /* Exit application */
-                printf("ESC key detected, exiting graphics mode...\n");
-                running = false;
-              }
+                return 1;
             }
+            if (game_draw(&main_game) != 0) {
+                printf("ERROR: Failed to draw forca game\n");
+                return 1;
+            }
+            break;
             
-            /* Handle keyboard input for initials entry */
-            if (get_game_state() == STATE_SP_ENTER_INITIALS) {
-              int kb_result = handle_initials_keyboard(last_scancode);
-              if (kb_result == 1) {
-                /* Initials confirmed, start countdown */
-                jogo_t *game = get_current_game();
-                
-                /* Unsubscribe from keyboard IRQ before state transition */
-                printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
-                kbd_unsubscribe_int();
-                
-                /* Start countdown */
-                game_start_countdown(game);
-                set_game_state(STATE_SP_COUNTDOWN);
-                
-                /* Resubscribe to keyboard IRQ */
-                printf("Resubscribing keyboard IRQ...\n");
-                if (kbd_subscribe_int(&kbd_bit_no) != 0) {
-                  printf("Failed to resubscribe keyboard IRQ\n");
-                }
-                
-                /* Draw the countdown page */
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error drawing countdown page\n");
-                }
-              } else if (kb_result == 0) {
-                /* Character added/removed, redraw */
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error redrawing initials page\n");
-                }
-              }
+        case STATE_MAIN_MENU:
+            printf("Returning to main menu\n");
+            if (draw_main_menu() != 0) {
+                printf("ERROR: Failed to draw main menu\n");
+                return 1;
             }
+            break;
             
-            /* Handle Enter key press during countdown to skip to letter rain */
-            if (get_game_state() == STATE_SP_COUNTDOWN && last_scancode == 0x1C) { /* 0x1C is ENTER_MAKE */
-              printf("Enter pressed, skipping countdown...\n");
-              
-              /* Unsubscribe from keyboard IRQ before state transition */
-              printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
-              kbd_unsubscribe_int();
-              
-              jogo_t *game = get_current_game();
-              
-              /* Skip directly to letter rain */
-              int lr_init_result = game_start_letter_rain(game);
-              if (lr_init_result != 0) {
-                printf("Error starting letter rain mini-game (code: %d)\n", lr_init_result);
-                game->state = GAME_STATE_LETTER_RAIN;
-              }
-              
-              set_game_state(STATE_SP_LETTER_RAIN);
-              
-              /* Resubscribe to keyboard IRQ */
-              printf("Resubscribing keyboard IRQ...\n");
-              if (kbd_subscribe_int(&kbd_bit_no) != 0) {
-                printf("Failed to resubscribe keyboard IRQ\n");
-              }
-              
-              /* Force redraw of page */
-              uint16_t mouse_x = mouse_get_x();
-              uint16_t mouse_y = mouse_get_y();
-              if (draw_current_page(mouse_x, mouse_y) != 0) {
-                printf("Error drawing letter rain page\n");
-              }
-            }
-            
-            /* Handle keyboard input for letter rain */
-            if (get_game_state() == STATE_SP_LETTER_RAIN) {
-              jogo_t *game = get_current_game();
-              
-              /* Check if Enter key was pressed to skip letter rain */
-              if (last_scancode == 0x1C) { /* 0x1C is ENTER_MAKE */
-                printf("Enter pressed, skipping letter rain...\n");
-                
-                /* Unsubscribe from keyboard IRQ before state transition */
-                printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
-                kbd_unsubscribe_int();
-                
-                /* Assign a default letter if none has been caught yet */
-                if (game->letra == 0) {
-                  game->letra = 'A';
-                  printf("No letter caught yet, using default letter 'A'\n");
-                }
-                
-                /* Skip directly to singleplayer game */
-                set_game_state(STATE_SP_PLAYING);
-                
-                /* Resubscribe to keyboard IRQ */
-                printf("Resubscribing keyboard IRQ...\n");
-                if (kbd_subscribe_int(&kbd_bit_no) != 0) {
-                  printf("Failed to resubscribe keyboard IRQ\n");
-                }
-                
-                /* Force redraw of page */
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error drawing singleplayer page\n");
-                }
-                
-                return 0;
-              }
-              
-              /* Normal letter rain input handling */
-              if (game_handle_letter_rain_input(game, last_scancode) != 0) {
-                printf("Error handling letter rain input\n");
-              }
-            }
-            
-            /* Handle keyboard input for singleplayer game */
-            if (get_game_state() == STATE_SP_PLAYING) {
-              extern singleplayer_game_t sp_game; // Reference the static game instance from videocard.c
-              
-              /* Pass keyboard input to the singleplayer game */
-              if (singleplayer_handle_input(&sp_game, last_scancode) != 0) {
-                printf("Error handling singleplayer input\n");
-              }
-              
-              /* Force a redraw of the screen */
-              uint16_t mouse_x = mouse_get_x();
-              uint16_t mouse_y = mouse_get_y();
-              if (draw_current_page(mouse_x, mouse_y) != 0) {
-                printf("Error redrawing singleplayer page\n");
-              }
-            }
-          }
-          
-          if (msg.m_notify.interrupts & BIT(mouse_bit_no)) {
-            /* Handle mouse interrupt only for certain states */
-            game_state_t current_state = get_game_state();
-            
-            /* Ignore mouse during countdown, letter rain and playing */
-            if (current_state == STATE_SP_COUNTDOWN || current_state == STATE_SP_LETTER_RAIN || 
-                current_state == STATE_SP_PLAYING) {
-              /* Just clear the mouse packet but don't process it */
-              mouse_ih_custom();
-              if (mouse_has_packet_ready()) {
-                mouse_clear_packet_ready();
-              }
-            } else {
-              /* Normal mouse processing for other states */
-              mouse_ih_custom();
-              
-              /* Check if mouse packet is ready */
-              if (mouse_has_packet_ready()) {
-                struct packet pp = mouse_get_packet();
-                mouse_clear_packet_ready();
-                
-                /* Redraw page if needed (mouse moved or state changed) */
-                if (mouse_menu_needs_redraw() || mouse_should_redraw_page()) {
-                  uint16_t mouse_x = mouse_get_x();
-                  uint16_t mouse_y = mouse_get_y();
-                  
-                  if (draw_current_page(mouse_x, mouse_y) != 0) {
-                    printf("Error redrawing page\n");
-                  }
-                  mouse_clear_redraw_flag();
-                  mouse_clear_page_redraw_flag();
-                }
-                
-                /* Handle left click based on current state */
-                if (pp.lb) {
-                  uint16_t mouse_x = mouse_get_x();
-                  uint16_t mouse_y = mouse_get_y();
-                  
-                  if (get_game_state() == STATE_MAIN_MENU) {
-                    int click_result = handle_menu_click(mouse_x, mouse_y, true);
-                    if (click_result == 1) { // Quit was clicked
-                      printf("Quit selected, exiting graphics mode...\n");
-                      running = false;
-                    } else if (click_result == 0) {
-                      /* State changed, redraw page */
-                      if (draw_current_page(mouse_x, mouse_y) != 0) {
-                        printf("Error drawing new page\n");
-                      }
-                    }
-                  } else if (get_game_state() == STATE_LEADERBOARD) {
-                    int click_result = handle_leaderboard_click(mouse_x, mouse_y, true);
-                    if (click_result == 1) { // Back button was clicked
-                      printf("Back button clicked, returning to main menu...\n");
-                      set_game_state(STATE_MAIN_MENU);
-                      if (draw_current_page(mouse_x, mouse_y) != 0) {
-                        printf("Error drawing main menu\n");
-                      }
-                    }
-                  } else if (get_game_state() == STATE_INSTRUCTIONS) {
-                    int click_result = handle_instructions_click(mouse_x, mouse_y, true);
-                    if (click_result == 1) { // Back button was clicked
-                      printf("Back button clicked, returning to main menu...\n");
-                      set_game_state(STATE_MAIN_MENU);
-                      if (draw_current_page(mouse_x, mouse_y) != 0) {
-                        printf("Error drawing main menu\n");
-                      }
-                    }
-                  } else if (get_game_state() == STATE_SP_ENTER_INITIALS) {
-                    int click_result = handle_initials_click(mouse_x, mouse_y, true);
-                    if (click_result == 1) { // Done button was clicked
-                      printf("Done button clicked, starting countdown...\n");
-                      jogo_t *game = get_current_game();
-                      game_start_countdown(game);
-                      set_game_state(STATE_SP_COUNTDOWN);
-                      if (draw_current_page(mouse_x, mouse_y) != 0) {
-                        printf("Error drawing countdown page\n");
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-          break;
         default:
-          break;
-      }
+            printf("WARNING: Unhandled state transition: %d\n", current_state);
+            break;
     }
     
-    /* No longer need countdown logic here - moved to timer interrupt */
-  }
-  
-  /* Unsubscribe timer interrupts */
-  if (timer_unsubscribe_int() != 0) {
-    printf("Error unsubscribing timer interrupts\n");
-  }
-  
-  /* Unsubscribe mouse interrupts */
-  if (mouse_disable() != 0) {
-    printf("Error unsubscribing mouse interrupts\n");
-  }
-  
-  /* Unsubscribe keyboard interrupts */
-  if (kbd_unsubscribe_int() != 0) {
-    printf("Error unsubscribing keyboard interrupts\n");
-  }
-  
-  /* Exit graphics mode */
-  if (exit_graphics_mode() != 0) {
-    printf("Error exiting graphics mode\n");
-    return 1;
-  }
-  
-  printf("Graphics mode exited successfully\n");
-  
-  return 0;
+    return 0;
+}
+
+/* Draw current state */
+int draw_current_state(void) {
+    switch (current_state) {
+        case STATE_MAIN_MENU:
+            return draw_main_menu();
+            
+        case STATE_MULTIPLAYER:
+            return draw_multiplayer_menu();
+            
+        case STATE_INSTRUCTIONS:
+            return draw_instructions();
+            
+        case STATE_SP_ENTER_INITIALS:
+        case STATE_SP_COUNTDOWN:
+            return singleplayer_draw(&main_game.singleplayer_game);
+            
+        case STATE_SP_LETTER_RAIN:
+        case STATE_SP_PLAYING:
+        case STATE_FORCA:
+            return game_draw(&main_game);
+            
+        default:
+            printf("WARNING: No draw function for state %d\n", current_state);
+            return 1;
+    }
 }

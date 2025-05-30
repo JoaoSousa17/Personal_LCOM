@@ -112,10 +112,8 @@ int exit_graphics_mode() {
     video_mem = NULL;
   }
 
-  /* Unsubscribe keyboard interrupts */
-  if (kbd_unsubscribe_int() != 0) {
-    printf("Error unsubscribing keyboard interrupts\n");
-  }
+  /* NÃO desinscrever as interrupções aqui - isso é feito no proj.c */
+  /* REMOVIDA a linha: kbd_unsubscribe_int(); */
   
   printf("Graphics mode exited successfully\n");
   
@@ -231,92 +229,94 @@ int draw_menu_option(uint16_t x, uint16_t y, uint16_t width, uint16_t height,
   return 0;
 }
 
-int draw_main_page() {
-  /* Define colors */
-  uint32_t bg_color = 0x1a1a2e;      /* Dark blue background */
-  uint32_t orange = 0xff6b35;        /* Orange for title */
-  uint32_t yellow = 0xffd700;        /* Yellow for borders */
-  uint32_t white = 0xffffff;         /* White for text */
-  uint32_t light_blue = 0x16537e;    /* Light blue for accent */
-  
-  /* Clear screen with dark background */
-  if (clear_screen(bg_color) != 0) return 1;
-  
-  /* Draw title "Fight List" centered at top */
-  const char *title = "FIGHT LIST";
-  uint8_t title_scale = 4;
-  uint16_t title_width = strlen(title) * 8 * title_scale;
-  uint16_t title_x = (h_res - title_width) / 2;
-  uint16_t title_y = 40;
-  
-  if (draw_string_scaled(title_x, title_y, title, orange, title_scale) != 0) return 1;
-  
-  /* Draw decorative line under title */
-  uint16_t line_width = title_width + 40;
-  uint16_t line_x = (h_res - line_width) / 2;
-  uint16_t line_y = title_y + title_scale * 8 + 15;
-  
-  for (uint16_t i = 0; i < line_width; i++) {
-    for (uint8_t thickness = 0; thickness < 3; thickness++) {
-      if (draw_pixel(line_x + i, line_y + thickness, light_blue) != 0) return 1;
+int draw_main_menu() {
+    /* Define colors */
+    uint32_t bg_color = 0x1a1a2e;
+    uint32_t primary_color = 0x16213e;
+    uint32_t accent_color = 0x0f3460;
+    uint32_t text_color = 0xe94560;
+    uint32_t secondary_text = 0xf5f5f5;
+
+    /* Clear screen */
+    if (clear_screen(bg_color) != 0) return 1;
+
+    /* Get screen dimensions */
+    uint16_t screen_width = get_h_res();
+    uint16_t screen_height = get_v_res();
+
+    /* Draw title */
+    const char *title = "WORD GAME";
+    uint16_t title_x = (screen_width - strlen(title) * 8 * 4) / 2;
+    if (draw_string_scaled(title_x, 100, title, text_color, 4) != 0) return 1;
+
+    /* Draw subtitle */
+    const char *subtitle = "Menu Principal";
+    uint16_t subtitle_x = (screen_width - strlen(subtitle) * 8 * 2) / 2;
+    if (draw_string_scaled(subtitle_x, 180, subtitle, secondary_text, 2) != 0) return 1;
+
+    /* Menu options */
+    const char *options[] = {
+        "Multiplayer",
+        "Single Player", 
+        "Instructions",
+        "Quit"
+    };
+
+    /* Calculate menu positioning */
+    uint16_t option_width = 300;
+    uint16_t option_height = 50;
+    uint16_t option_spacing = 70;
+    
+    uint16_t start_x = (screen_width - option_width) / 2;
+    uint16_t start_y = screen_height / 2 - 50;
+
+    /* Draw menu options */
+    for (int i = 0; i < 4; i++) {
+        uint16_t option_x = start_x;
+        uint16_t option_y = start_y + i * option_spacing;
+        
+        /* Draw option background */
+        uint32_t option_bg = (i == 0) ? accent_color : primary_color;
+        if (draw_filled_rectangle(option_x, option_y, option_width, option_height, option_bg) != 0) return 1;
+        
+        /* Draw option border */
+        if (draw_rectangle_border(option_x, option_y, option_width, option_height, text_color, 2) != 0) return 1;
+        
+        /* Draw option text */
+        uint16_t text_x = option_x + (option_width - strlen(options[i]) * 8 * 2) / 2;
+        uint16_t text_y = option_y + (option_height - 16) / 2;
+        if (draw_string_scaled(text_x, text_y, options[i], secondary_text, 2) != 0) return 1;
     }
-  }
-  
-  /* Menu options dimensions */
-  uint16_t option_width = 280;
-  uint16_t option_height = 60;
-  uint16_t spacing = 20;
-  
-  /* Calculate starting positions */
-  uint16_t start_y = line_y + 60;
-  uint16_t center_x = h_res / 2;
-  
-  /* First row: Single Player and 2 Player (side by side) */
-  uint16_t row1_y = start_y;
-  uint16_t single_x = center_x - option_width - spacing/2;
-  uint16_t multi_x = center_x + spacing/2;
-  
-  if (draw_menu_option(single_x, row1_y, option_width, option_height, 
-                      "Single Player", white, yellow, 2) != 0) return 1;
-  
-  if (draw_menu_option(multi_x, row1_y, option_width, option_height, 
-                      "2 Player", white, yellow, 2) != 0) return 1;
-  
-  /* Second row: Leaderboard and Instructions (side by side) */
-  uint16_t row2_y = row1_y + option_height + spacing + 10;
-  
-  if (draw_menu_option(single_x, row2_y, option_width, option_height, 
-                      "Leaderboard", white, yellow, 2) != 0) return 1;
-  
-  if (draw_menu_option(multi_x, row2_y, option_width, option_height, 
-                      "Instructions", white, yellow, 2) != 0) return 1;
-  
-  /* Third row: Quit (full width) */
-  uint16_t row3_y = row2_y + option_height + spacing + 20;
-  uint16_t quit_width = option_width * 2 + spacing;
-  uint16_t quit_x = center_x - quit_width/2;
-  
-  if (draw_menu_option(quit_x, row3_y, quit_width, option_height, 
-                      "QUIT", white, 0xff4444, 3) != 0) return 1; /* Red border for quit */
-  
-  /* Add some decorative elements */
-  /* Corner decorations */
-  uint16_t corner_size = 30;
-  
-  /* Top-left corner */
-  if (draw_rectangle_border(20, 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
-  
-  /* Top-right corner */
-  if (draw_rectangle_border(h_res - corner_size - 20, 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
-  
-  /* Bottom-left corner */
-  if (draw_rectangle_border(20, v_res - corner_size - 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
-  
-  /* Bottom-right corner */
-  if (draw_rectangle_border(h_res - corner_size - 20, v_res - corner_size - 20, corner_size, corner_size, light_blue, 2) != 0) return 1;
-  
-  return 0;
+
+    /* Easter Egg - Quadro de estilo no canto direito */
+    uint16_t easter_egg_x = screen_width - 120;
+    uint16_t easter_egg_y = 20;
+    uint16_t easter_egg_width = 100;
+    uint16_t easter_egg_height = 80;
+    
+    /* Desenhar moldura do quadro */
+    if (draw_filled_rectangle(easter_egg_x, easter_egg_y, easter_egg_width, easter_egg_height, 0x8B4513) != 0) return 1; /* Castanho para madeira */
+    if (draw_filled_rectangle(easter_egg_x + 5, easter_egg_y + 5, easter_egg_width - 10, easter_egg_height - 10, 0xF5F5DC) != 0) return 1; /* Bege para o fundo */
+    
+    /* Desenhar "decoração" dentro do quadro */
+    if (draw_filled_rectangle(easter_egg_x + 15, easter_egg_y + 15, 20, 20, 0xFF6B35) != 0) return 1; /* Quadrado laranja */
+    if (draw_filled_rectangle(easter_egg_x + 45, easter_egg_y + 15, 20, 20, 0x3498DB) != 0) return 1; /* Quadrado azul */
+    if (draw_filled_rectangle(easter_egg_x + 65, easter_egg_y + 15, 20, 20, 0xE74C3C) != 0) return 1; /* Quadrado vermelho */
+    
+    if (draw_filled_rectangle(easter_egg_x + 30, easter_egg_y + 45, 20, 20, 0x27AE60) != 0) return 1; /* Quadrado verde */
+    if (draw_filled_rectangle(easter_egg_x + 55, easter_egg_y + 45, 20, 20, 0xF39C12) != 0) return 1; /* Quadrado amarelo */
+    
+    /* Moldura final do quadro */
+    if (draw_rectangle_border(easter_egg_x, easter_egg_y, easter_egg_width, easter_egg_height, 0x654321, 3) != 0) return 1;
+
+    /* Instructions */
+    const char *instruction = "Use mouse to select options";
+    uint16_t inst_x = (screen_width - strlen(instruction) * 8) / 2;
+    if (draw_string_scaled(inst_x, screen_height - 100, instruction, secondary_text, 1) != 0) return 1;
+
+    return 0;
 }
+
 
 int draw_leaderboard() {
   /* Use the new graphics leaderboard function with mouse support */
@@ -718,18 +718,18 @@ int draw_init_sp_game() {
   
   /* Draw title */
   const char *title = "SINGLE PLAYER";
-  uint16_t title_x = (h_res - strlen(title) * 8 * 3) / 2;
+  uint16_t title_x = (get_h_res() - strlen(title) * 8 * 3) / 2;
   if (draw_string_scaled(title_x, 50, title, orange, 3) != 0) return 1;
   
   /* Draw game setup */
   if (draw_string_scaled(100, 200, "Iniciando modo single player...", white, 2) != 0) return 1;
-  if (draw_string_scaled(100, 250, "A preparar jogo...", white, 2) != 0) return 1;
   
-  /* Initialize game and move to initials entry */
+  /* Initialize game and move to initials entry IMMEDIATELY */
   jogo_t *game = get_current_game();
   game_init(game);
   set_game_state(STATE_SP_ENTER_INITIALS);
   
+  /* Don't draw the "preparing" message - go straight to initials */
   return 0;
 }
 

@@ -4,7 +4,6 @@
 #include "font.h"
 #include <stdlib.h>
 #include <string.h>
-// Removido #include <time.h> pois não está disponível no MINIX
 
 /* Scancode definitions */
 #define A_MAKE 0x1E
@@ -28,12 +27,57 @@ static void simple_srand(uint32_t seed) {
     rand_seed = seed;
 }
 
-/* Removido board_pattern desnecessário */
+/* Tabela de probabilidades acumuladas para letras portuguesas (x100 para evitar decimais) */
+static const int letter_probabilities[] = {
+    1463,  /* A: 14.63% */
+    1567,  /* B: 1.04% (1463 + 104) */
+    1955,  /* C: 3.88% (1567 + 388) */
+    2454,  /* D: 4.99% (1955 + 499) */
+    3711,  /* E: 12.57% (2454 + 1257) */
+    3813,  /* F: 1.02% (3711 + 102) */
+    3943,  /* G: 1.30% (3813 + 130) */
+    4071,  /* H: 1.28% (3943 + 128) */
+    4689,  /* I: 6.18% (4071 + 618) */
+    4729,  /* J: 0.40% (4689 + 40) */
+    4731,  /* K: 0.02% (4729 + 2) */
+    5009,  /* L: 2.78% (4731 + 278) */
+    5483,  /* M: 4.74% (5009 + 474) */
+    5988,  /* N: 5.05% (5483 + 505) */
+    7061,  /* O: 10.73% (5988 + 1073) */
+    7313,  /* P: 2.52% (7061 + 252) */
+    7433,  /* Q: 1.20% (7313 + 120) */
+    8086,  /* R: 6.53% (7433 + 653) */
+    8867,  /* S: 7.81% (8086 + 781) */
+    9301,  /* T: 4.34% (8867 + 434) */
+    9764,  /* U: 4.63% (9301 + 463) */
+    9931,  /* V: 1.67% (9764 + 167) */
+    9932,  /* W: 0.01% (9931 + 1) */
+    9953,  /* X: 0.21% (9932 + 21) */
+    9954,  /* Y: 0.01% (9953 + 1) */
+    10000  /* Z: 0.47% (9954 + 46) - Total: 100.00% */
+};
+
 char get_random_letter() {
-    int index = simple_rand() % 26; 
-    return 'A' + index;  
+    /* Gerar número aleatório entre 0 e 9999 (equivale a 0.00% a 99.99%) */
+    int random_value = simple_rand() % 10000;
+    
+    /* Encontrar a letra correspondente usando as probabilidades acumuladas */
+    for (int i = 0; i < 26; i++) {
+        if (random_value < letter_probabilities[i]) {
+            return 'A' + i;  /* Retorna a letra correspondente */
+        }
+    }
+    
+    /* Fallback para 'Z' (não deve acontecer) */
+    return 'Z';
 }
 
+/* Função para apagar um sprite específico */
+static void erase_letter_sprite(int x, int y, int width, int height) {
+    if (draw_filled_rectangle(x, y, width, height, 0x1a1a2e) != 0) {
+        printf("Error erasing letter sprite\n");
+    }
+}
 
 /* Função simplificada para criar sprite de letra */
 Sprite *create_letter_sprite(char letter, int x, int y) {
@@ -84,6 +128,8 @@ int letter_rain_init(letter_rain_t *game) {
         game->letters[i].sprite = NULL;
         game->letters[i].letter = 'A';
         game->letters[i].color = 0xFFFFFF;
+        game->letters[i].last_x = -1; /* Initialize previous positions */
+        game->letters[i].last_y = -1;
     }
     
     // Initialize letter collection counters (A=0, B=1, ..., Z=25)
@@ -103,7 +149,7 @@ int letter_rain_init(letter_rain_t *game) {
     game->board.y = screen_height - BOARD_HEIGHT - 20;
     game->board.width = BOARD_WIDTH;
     game->board.height = BOARD_HEIGHT;
-    // Removed missed_count as it's no longer needed
+    game->board.last_x = -1; /* Initialize previous position */
     
     // Criar sprite do board
     game->board.sprite = create_board_sprite(game->board.x, game->board.y);
@@ -116,6 +162,7 @@ int letter_rain_init(letter_rain_t *game) {
     game->game_over = false;
     game->frame_counter = 0;
     game->spawn_rate = 35; // Spawn a letter every second (35 FPS)
+    game->first_draw = true; /* Flag for first draw */
     
     return 0;
 }
@@ -138,7 +185,7 @@ int letter_rain_update(letter_rain_t *game) {
                 
                 // Random X position across screen width
                 uint16_t screen_width = get_h_res();
-                if (screen_width <= 16) break; // Evitar divisão por zero
+                if (screen_width <= 16) break;
                 
                 int x = simple_rand() % (screen_width - 30);
                 int y = -16; // Start above screen
@@ -146,6 +193,10 @@ int letter_rain_update(letter_rain_t *game) {
                 game->letters[i].sprite = create_letter_sprite(game->letters[i].letter, x, y);
                 if (game->letters[i].sprite == NULL) {
                     game->letters[i].active = false;
+                } else {
+                    /* Initialize previous position to INVALID so it won't be erased */
+                    game->letters[i].last_x = -1;
+                    game->letters[i].last_y = -1;
                 }
                 break;
             }
@@ -155,13 +206,20 @@ int letter_rain_update(letter_rain_t *game) {
     // Update falling letters
     for (int i = 0; i < MAX_FALLING_LETTERS; i++) {
         if (game->letters[i].active && game->letters[i].sprite != NULL) {
-            // Move letter down
+            
+            // Move letter down (this updates sprite position)
             animate_sprite(game->letters[i].sprite);
             
             // Check if letter hit the board
             if (check_letter_board_collision(&game->letters[i], &game->board)) {
                 char caught = game->letters[i].letter;
-                int letter_index = caught - 'A'; // A=0, B=1, ..., Z=25
+                int letter_index = caught - 'A';
+                
+                /* APAGAR o sprite da tela antes de destruir */
+                if (game->letters[i].last_x >= 0 && game->letters[i].last_y >= 0) {
+                    erase_letter_sprite(game->letters[i].last_x, game->letters[i].last_y, 16, 16);
+                }
+                erase_letter_sprite(game->letters[i].sprite->x, game->letters[i].sprite->y, 16, 16);
                 
                 // Increment counter for this letter
                 if (letter_index >= 0 && letter_index < 26) {
@@ -176,6 +234,8 @@ int letter_rain_update(letter_rain_t *game) {
                         destroy_sprite(game->letters[i].sprite);
                         game->letters[i].sprite = NULL;
                         game->letters[i].active = false;
+                        game->letters[i].last_x = -1;
+                        game->letters[i].last_y = -1;
                         
                         return 1; // Game won!
                     }
@@ -185,15 +245,25 @@ int letter_rain_update(letter_rain_t *game) {
                 destroy_sprite(game->letters[i].sprite);
                 game->letters[i].sprite = NULL;
                 game->letters[i].active = false;
+                game->letters[i].last_x = -1;
+                game->letters[i].last_y = -1;
                 continue;
             }
             
-            // Check if letter hit the bottom edge (missed) - just ignore it
+            // Check if letter hit the bottom edge (missed)
             if (game->letters[i].sprite->y >= (int)get_v_res()) {
-                // Simply deactivate letter - no penalty
+                /* APAGAR o sprite da tela antes de destruir */
+                if (game->letters[i].last_x >= 0 && game->letters[i].last_y >= 0) {
+                    erase_letter_sprite(game->letters[i].last_x, game->letters[i].last_y, 16, 16);
+                }
+                erase_letter_sprite(game->letters[i].sprite->x, game->letters[i].sprite->y, 16, 16);
+                
+                // Deactivate letter
                 destroy_sprite(game->letters[i].sprite);
                 game->letters[i].sprite = NULL;
                 game->letters[i].active = false;
+                game->letters[i].last_x = -1;
+                game->letters[i].last_y = -1;
             }
         }
     }
@@ -205,55 +275,89 @@ int letter_rain_draw(letter_rain_t *game) {
     if (game == NULL)
         return 1;
     
-    // Clear screen
-    if (clear_screen(0x1a1a2e) != 0)
-        return 1;
+    /* Only clear screen on first draw */
+    if (game->first_draw) {
+        if (clear_screen(0x1a1a2e) != 0)
+            return 1;
+        game->first_draw = false;
+    }
     
-    // Draw board using simple rectangle instead of sprite
+    /* Handle falling letters */
+    for (int i = 0; i < MAX_FALLING_LETTERS; i++) {
+        if (game->letters[i].active && game->letters[i].sprite != NULL) {
+            
+            /* SEMPRE apagar a posição anterior se existir */
+            if (game->letters[i].last_x >= 0 && game->letters[i].last_y >= 0) {
+                erase_letter_sprite(game->letters[i].last_x, game->letters[i].last_y, 16, 16);
+            }
+            
+            /* Desenhar na nova posição apenas se estiver dentro dos limites */
+            if (game->letters[i].sprite->x >= -16 && game->letters[i].sprite->y >= -16 &&
+                game->letters[i].sprite->x < (int)get_h_res() + 16 && 
+                game->letters[i].sprite->y < (int)get_v_res() + 16) {
+                
+                /* Draw letter background (simple rectangle) */
+                if (draw_filled_rectangle(game->letters[i].sprite->x, game->letters[i].sprite->y,
+                                         16, 16, 0x666666) != 0) {
+                    return 1;
+                }
+                
+                /* Draw letter character on top */
+                char letter_str[2] = {game->letters[i].letter, '\0'};
+                int text_x = game->letters[i].sprite->x + 4;
+                int text_y = game->letters[i].sprite->y + 4;
+                
+                if (draw_string_scaled(text_x, text_y, letter_str, 0xFFFFFF, 1) != 0)
+                    return 1;
+            }
+            
+            /* SEMPRE atualizar a última posição */
+            game->letters[i].last_x = game->letters[i].sprite->x;
+            game->letters[i].last_y = game->letters[i].sprite->y;
+        }
+    }
+    
+    /* Erase board from previous position if it moved */
+    if (game->board.last_x != -1 && game->board.last_x != game->board.x) {
+        if (draw_filled_rectangle(game->board.last_x, game->board.y, 
+                                 game->board.width, game->board.height, 0x1a1a2e) != 0) {
+            return 1;
+        }
+    }
+    
+    /* Draw board at current position */
     if (draw_filled_rectangle(game->board.x, game->board.y, 
                              game->board.width, game->board.height, 0xFFD700) != 0) {
         return 1;
     }
     
-    // Draw board border
+    /* Draw board border */
     if (draw_rectangle_border(game->board.x, game->board.y, 
                              game->board.width, game->board.height, 0xFFA500, 2) != 0) {
         return 1;
     }
     
-    // Draw falling letters
-    for (int i = 0; i < MAX_FALLING_LETTERS; i++) {
-        if (game->letters[i].active && game->letters[i].sprite != NULL) {
-            // Draw letter background (simple rectangle)
-            if (draw_filled_rectangle(game->letters[i].sprite->x, game->letters[i].sprite->y,
-                                     16, 16, 0x666666) != 0) {
-                return 1;
-            }
-            
-            // Draw letter character on top
-            char letter_str[2] = {game->letters[i].letter, '\0'};
-            int text_x = game->letters[i].sprite->x + 4;
-            int text_y = game->letters[i].sprite->y + 4;
-            
-            if (draw_string_scaled(text_x, text_y, letter_str, 0xFFFFFF, 1) != 0)
-                return 1;
-        }
-    }
+    /* Update board last position */
+    game->board.last_x = game->board.x;
     
-    // Draw UI info - removed miss counter since misses are now ignored
+    /* Draw UI info in a fixed area */
+    /* Clear the UI area first */
+    if (draw_filled_rectangle(10, 10, 300, 200, 0x1a1a2e) != 0)
+        return 1;
+    
     char status[100];
     sprintf(status, "Letter Collection Status:");
     if (draw_string_scaled(20, 20, status, 0x00FF88, 1) != 0)
         return 1;
     
-    // Show counters for letters that have been caught at least once
+    /* Show counters for letters that have been caught at least once */
     int line_y = 40;
     for (int i = 0; i < 26; i++) {
         if (game->letter_counters[i] > 0) {
             char letter_info[20];
             sprintf(letter_info, "%c: %d/2", 'A' + i, game->letter_counters[i]);
             
-            uint32_t color = (game->letter_counters[i] >= 2) ? 0x00FF00 : 0xFFFF00; // Green if complete, yellow if partial
+            uint32_t color = (game->letter_counters[i] >= 2) ? 0x00FF00 : 0xFFFF00;
             if (draw_string_scaled(20, line_y, letter_info, color, 1) != 0)
                 return 1;
             line_y += 15;
@@ -315,17 +419,22 @@ void letter_rain_cleanup(letter_rain_t *game) {
     if (game == NULL)
         return;
     
-    // Cleanup falling letters
+    // Cleanup falling letters - erase them first
     for (int i = 0; i < MAX_FALLING_LETTERS; i++) {
-        if (game->letters[i].sprite != NULL) {
+        if (game->letters[i].active && game->letters[i].sprite != NULL) {
+            /* Erase sprite before cleanup */
+            erase_letter_sprite(game->letters[i].sprite->x, game->letters[i].sprite->y, 16, 16);
             destroy_sprite(game->letters[i].sprite);
             game->letters[i].sprite = NULL;
         }
         game->letters[i].active = false;
+        game->letters[i].last_x = -1;
+        game->letters[i].last_y = -1;
     }
     
-    // Cleanup board
+    // Cleanup board - erase it first
     if (game->board.sprite != NULL) {
+        erase_letter_sprite(game->board.x, game->board.y, game->board.width, game->board.height);
         destroy_sprite(game->board.sprite);
         game->board.sprite = NULL;
     }

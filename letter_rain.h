@@ -32,6 +32,7 @@ typedef struct {
     Sprite *sprite;     // Sprite for the letter
     bool active;        // Whether this letter is falling
     uint32_t color;     // Letter color
+    int last_x, last_y; // Previous position for smooth erasing
 } falling_letter_t;
 
 /**
@@ -41,6 +42,7 @@ typedef struct {
     int x, y;           // Board position
     int width, height;  // Board dimensions
     Sprite *sprite;     // Board sprite
+    int last_x;         // Previous X position for smooth erasing
 } board_t;
 
 /**
@@ -54,6 +56,7 @@ typedef struct {
     uint32_t frame_counter; // For timing letter spawning
     uint32_t spawn_rate;    // Frames between letter spawns
     int letter_counters[26]; // Counter for each letter (A=0, B=1, ..., Z=25)
+    bool first_draw;        // Flag to indicate first draw (for initial clear)
 } letter_rain_t;
 
 /**

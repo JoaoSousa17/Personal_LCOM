@@ -25,11 +25,16 @@ static bool esc_pressed = false;
 uint8_t last_scancode = 0; /* Expose last scancode for game logic */
 
 int kbd_subscribe_int(uint8_t *bit_no) {
+  /* Reset hook_id to original value each time */
+  hook_id = KBD_IRQ;
   *bit_no = hook_id;
+  
   if (sys_irqsetpolicy(KBD_IRQ, IRQ_REENABLE | IRQ_EXCLUSIVE, &hook_id) != OK) {
     printf("kbd_subscribe_int(): sys_irqsetpolicy() failed\n");
     return 1;
   }
+  
+  printf("kbd_subscribe_int(): Successfully subscribed with hook_id=%d\n", hook_id);
   return 0;
 }
 
@@ -38,6 +43,8 @@ int kbd_unsubscribe_int() {
     printf("kbd_unsubscribe_int(): sys_irqrmpolicy() failed\n");
     return 1;
   }
+  
+  printf("kbd_unsubscribe_int(): Successfully unsubscribed\n");
   return 0;
 }
 
@@ -83,8 +90,8 @@ int kbd_int_handler() {
       esc_pressed = true;
     }
     
-    /* For debugging */
-    printf("Scancode: 0x%02X\n", scancode);
+    /* For debugging - comment out in final version */
+    /* printf("Scancode: 0x%02X\n", scancode); */
   }
   
   return 0;

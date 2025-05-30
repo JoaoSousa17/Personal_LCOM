@@ -99,6 +99,7 @@ int (timer_set_frequency)(uint8_t timer, uint32_t freq) {
 }
 
 int (timer_subscribe_int)(uint8_t *bit_no) {
+  /* Reset timer_hook_id to original value */
   timer_hook_id = 0; /* Use timer 0 */
   *bit_no = timer_hook_id;
   
@@ -107,6 +108,7 @@ int (timer_subscribe_int)(uint8_t *bit_no) {
     return 1;
   }
   
+  printf("timer_subscribe_int(): Successfully subscribed with hook_id=%d\n", timer_hook_id);
   return 0;
 }
 
@@ -116,6 +118,7 @@ int (timer_unsubscribe_int)() {
     return 1;
   }
   
+  printf("timer_unsubscribe_int(): Successfully unsubscribed\n");
   return 0;
 }
 

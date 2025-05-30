@@ -18,42 +18,39 @@ static uint16_t mouse_y = 300;
 static bool menu_needs_redraw = true;
 static bool page_needs_redraw = false;
 
-// Function declarations for menu actions (now in videocard.c)
-int draw_leaderboard();
-int draw_instructions();
-int draw_init_sp_game();
-int draw_init_mp_game();
-
 // Subscreve os interrupts do rato e ativa o data reporting
 int (mouse_enable)(uint8_t *bit_no) {
+  /* Reset hook_id to original value */
   hook_id = MOUSE_IRQ;
   *bit_no = hook_id;
   
   if (sys_irqsetpolicy(MOUSE_IRQ, IRQ_REENABLE | IRQ_EXCLUSIVE, &hook_id)) {
-    printf("Erro ao subscrever as interrupções do rato.\n");
+    printf("mouse_enable(): sys_irqsetpolicy() failed\n");
     return 1;
   }
   
   if (mouse_enable_data_reporting_mine()) {
-    printf("Erro ao ativar o data reporting do rato.\n");
+    printf("mouse_enable(): mouse_enable_data_reporting_mine() failed\n");
+    sys_irqrmpolicy(&hook_id);
     return 1;
   }
   
+  printf("mouse_enable(): Successfully subscribed with hook_id=%d\n", hook_id);
   return 0;
 }
 
 // Reverte todas as configurações de mouse_enable
 int (mouse_disable)() {
   if (mouse_disable_data_reporting_mine()) {
-    printf("Erro ao desativar o data reporting do rato.\n");
-    return 1;
+    printf("mouse_disable(): mouse_disable_data_reporting_mine() failed\n");
   }
   
   if (sys_irqrmpolicy(&hook_id)) {
-    printf("Erro ao cancelar a subscrição das interrupções do rato.\n");
+    printf("mouse_disable(): sys_irqrmpolicy() failed\n");
     return 1;
   }
   
+  printf("mouse_disable(): Successfully unsubscribed\n");
   return 0;
 }
 
@@ -91,7 +88,7 @@ void (mouse_ih_custom)() {
             if (mouse_bytes_counter == 3) { // Pacote completo
                 struct packet pp;
                 build_packet(&pp, packet_bytes);
-                mouse_print_packet(&pp);
+                /* Removed mouse_print_packet for cleaner output */
                 last_packet = pp; // Guarda o último pacote completo
                 packet_ready = true;
                 
@@ -106,15 +103,13 @@ void (mouse_ih_custom)() {
                 if (mouse_y >= get_v_res()) mouse_y = get_v_res() - 1;
                 
                 // Mark that menu needs redraw due to mouse movement
-                // Only mark for redraw if we're in main menu or if significant movement
                 if (get_game_state() == STATE_MAIN_MENU) {
                     menu_needs_redraw = true;
                     page_needs_redraw = true;
                 } else {
-                    // For other states like leaderboard, only redraw if there was movement
+                    // For other states, only redraw if there was movement
                     if (pp.delta_x != 0 || pp.delta_y != 0) {
                         menu_needs_redraw = true; 
-                        // Don't set page_needs_redraw for leaderboard to avoid constant redraws
                     }
                 }
                 
@@ -158,12 +153,12 @@ int handle_menu_click(uint16_t x, uint16_t y, bool left_click) {
     uint16_t screen_width = get_h_res();
     uint16_t center_x = screen_width / 2;
     
-    // Menu options dimensions (same as in draw_main_page)
-    uint16_t option_width = 180;
+    // Menu options dimensions (match draw_main_page_with_hover)
+    uint16_t option_width = 230;
     uint16_t option_height = 60;
     uint16_t spacing = 20;
     
-    // Calculate starting positions (same as in draw_main_page)
+    // Calculate starting positions
     uint16_t start_y = 140; // Approximate position after title
     
     // First row positions
