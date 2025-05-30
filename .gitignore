@@ -1,0 +1,6 @@
+# Ignorar ficheiros objeto
+*.o
+
+# Ignorar ficheiros de trace e output
+trace.txt
+output.txt
