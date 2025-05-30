@@ -15,8 +15,7 @@ typedef enum {
   STATE_SP_ENTER_INITIALS,
   STATE_SP_COUNTDOWN,
   STATE_SP_LETTER_RAIN,
-  STATE_SP_PLAYING,
-  STATE_SP_FINISHED
+  STATE_SP_PLAYING
 } game_state_t;
 
 /**
@@ -271,33 +270,6 @@ int draw_current_page(uint16_t mouse_x, uint16_t mouse_y);
  * @return True if point is inside rectangle
  */
 bool is_point_in_rect(uint16_t px, uint16_t py, uint16_t rx, uint16_t ry, uint16_t rw, uint16_t rh);
-
-/**
- * @brief Draw game finished page
- * 
- * @param mouse_x Current mouse X position
- * @param mouse_y Current mouse Y position
- * @return 0 on success, non-zero otherwise
- */
-int draw_game_finished_page(uint16_t mouse_x, uint16_t mouse_y);
-
-/**
- * @brief Handle mouse clicks on game finished page
- * 
- * @param x Mouse x coordinate
- * @param y Mouse y coordinate
- * @param left_click True if left button was clicked
- * @return 1 if play again, 2 if main menu, -1 if no action
- */
-int handle_game_finished_click(uint16_t x, uint16_t y, bool left_click);
-
-/**
- * @brief Draw fight list main game
- * 
- * @param game Pointer to game structure
- * @return 0 on success, non-zero otherwise
- */
-int game_draw_fight_list(struct jogo_t *game);
 
 // Declare video_mem as external for other modules to access
 extern void *video_mem;

@@ -195,67 +195,32 @@ if (msg.m_notify.interrupts & BIT(timer_bit_no)) {
   }
   
   /* Handle letter rain updates */
-      if (get_game_state() == STATE_SP_LETTER_RAIN) {
-        jogo_t *game = get_current_game();
-        int lr_result = game_update_letter_rain(game);
-        if (lr_result == 1) {
-          /* Letter rain finished */
-          if (game->letra != 0) {
-            printf("Letter rain finished, caught letter: %c\n", game->letra);
-            
-            /* Start Fight List game */
-            int fl_result = game_start_fight_list(game);
-            if (fl_result != 0) {
-              printf("Error starting Fight List game\n");
-              set_game_state(STATE_MAIN_MENU);
-            } else {
-              set_game_state(STATE_SP_PLAYING);
-            }
-          } else {
-            printf("Letter rain failed, game over\n");
-            set_game_state(STATE_MAIN_MENU);
-          }
-          uint16_t mouse_x = mouse_get_x();
-          uint16_t mouse_y = mouse_get_y();
-          if (draw_current_page(mouse_x, mouse_y) != 0) {
-            printf("Error drawing next page\n");
-          }
-        } else {
-          /* Redraw letter rain a cada frame para animação */
-          uint16_t mouse_x = mouse_get_x();
-          uint16_t mouse_y = mouse_get_y();
-          if (draw_current_page(mouse_x, mouse_y) != 0) {
-            printf("Error redrawing letter rain page\n");
-          }
-        }
+  if (get_game_state() == STATE_SP_LETTER_RAIN) {
+    jogo_t *game = get_current_game();
+    int lr_result = game_update_letter_rain(game);
+    if (lr_result == 1) {
+      /* Letter rain finished */
+      if (game->letra != 0) {
+        printf("Letter rain finished, caught letter: %c\n", game->letra);
+        set_game_state(STATE_SP_PLAYING);
+      } else {
+        printf("Letter rain failed, game over\n");
+        set_game_state(STATE_MAIN_MENU);
       }
-      
-      /* Handle Fight List updates */
-      if (get_game_state() == STATE_SP_PLAYING) {
-        jogo_t *game = get_current_game();
-        int fl_result = game_update_fight_list(game);
-        if (fl_result == 1) {
-          /* Fight List finished */
-          printf("Fight List finished, final score: %d\n", game->pontuacao);
-          
-          /* Save score to leaderboard */
-          guardarPontuacao(game->pontuacao, game->nome, game->fight_list_game.categoria_atual->nome);
-          
-          set_game_state(STATE_SP_FINISHED);
-          uint16_t mouse_x = mouse_get_x();
-          uint16_t mouse_y = mouse_get_y();
-          if (draw_current_page(mouse_x, mouse_y) != 0) {
-            printf("Error drawing finished page\n");
-          }
-        } else {
-          /* Redraw Fight List a cada frame para atualizar timer */
-          uint16_t mouse_x = mouse_get_x();
-          uint16_t mouse_y = mouse_get_y();
-          if (draw_current_page(mouse_x, mouse_y) != 0) {
-            printf("Error redrawing fight list page\n");
-          }
-        }
+      uint16_t mouse_x = mouse_get_x();
+      uint16_t mouse_y = mouse_get_y();
+      if (draw_current_page(mouse_x, mouse_y) != 0) {
+        printf("Error drawing next page\n");
       }
+    } else {
+      /* Redraw letter rain a cada frame para animação */
+      uint16_t mouse_x = mouse_get_x();
+      uint16_t mouse_y = mouse_get_y();
+      if (draw_current_page(mouse_x, mouse_y) != 0) {
+        printf("Error redrawing letter rain page\n");
+      }
+    }
+  }
 }
           
           if (msg.m_notify.interrupts & BIT(kbd_bit_no)) {
