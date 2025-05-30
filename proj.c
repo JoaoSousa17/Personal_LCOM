@@ -9,6 +9,7 @@
 #include "leaderboard.h"
 #include "game.h"
 #include "utils.h"
+#include "singleplayer.h"
 
 uint16_t mode;
 uint8_t kbd_bit_no = 0;
@@ -150,6 +151,10 @@ int (proj_main_loop)(int argc, char* argv[])
                 /* Debug: Check game state before initialization */
                 printf("Game state before letter rain init: %d\n", game->state);
                 
+                /* Unsubscribe from keyboard IRQ before state transition */
+                printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
+                kbd_unsubscribe_int();
+                
                 /* Primeiro inicializa o letter rain */
                 int lr_init_result = game_start_letter_rain(game);
                 printf("Letter rain init result: %d\n", lr_init_result);
@@ -167,6 +172,12 @@ int (proj_main_loop)(int argc, char* argv[])
                   /* Letter rain inicializado com sucesso */
                   printf("Letter rain initialized successfully\n");
                   set_game_state(STATE_SP_LETTER_RAIN);
+                }
+                
+                /* Resubscribe to keyboard IRQ */
+                printf("Resubscribing keyboard IRQ...\n");
+                if (kbd_subscribe_int(&kbd_bit_no) != 0) {
+                  printf("Failed to resubscribe keyboard IRQ\n");
                 }
                 
                 /* Força redesenho da página */
@@ -190,26 +201,29 @@ int (proj_main_loop)(int argc, char* argv[])
                   }
                 }
               }
-            }
-            
-            /* Handle letter rain updates */
-            if (get_game_state() == STATE_SP_LETTER_RAIN) {
+            } else if (get_game_state() == STATE_SP_LETTER_RAIN) {
+              /* Handle letter rain updates */
               jogo_t *game = get_current_game();
               int lr_result = game_update_letter_rain(game);
               if (lr_result == 1) {
                 /* Letter rain finished */
-                if (game->letra != 0 && game->state == GAME_STATE_SINGLEPLAYER) {
-                  printf("Letter rain finished, caught letter: %c, internal state: %d\n", 
-                        game->letra, game->state);
-                  
-                  // FORÇAR a transição para singleplayer
-                  set_game_state(STATE_SP_SINGLEPLAYER);
-                  
-                  printf("Forced transition to STATE_SP_SINGLEPLAYER\n");
+                
+                /* Unsubscribe from keyboard IRQ before state transition */
+                printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
+                kbd_unsubscribe_int();
+                
+                if (game->letra != 0) {
+                  printf("Letter rain finished, caught letter: %c\n", game->letra);
+                  set_game_state(STATE_SP_PLAYING);
                 } else {
-                  printf("Letter rain failed or error, game state: %d, letter: %c\n", 
-                        game->state, game->letra);
+                  printf("Letter rain failed, game over\n");
                   set_game_state(STATE_MAIN_MENU);
+                }
+                
+                /* Resubscribe to keyboard IRQ */
+                printf("Resubscribing keyboard IRQ...\n");
+                if (kbd_subscribe_int(&kbd_bit_no) != 0) {
+                  printf("Failed to resubscribe keyboard IRQ\n");
                 }
                 
                 uint16_t mouse_x = mouse_get_x();
@@ -225,28 +239,18 @@ int (proj_main_loop)(int argc, char* argv[])
                   printf("Error redrawing letter rain page\n");
                 }
               }
-            }
-            
-            /* Handle singleplayer updates */
-            if (get_game_state() == STATE_SP_SINGLEPLAYER) {
-              jogo_t *game = get_current_game();
-              int sp_result = game_update_singleplayer(game);
-              if (sp_result == 1) {
-                /* Singleplayer finished */
-                printf("Singleplayer finished, final score: %d\n", game->pontuacao);
-                set_game_state(STATE_MAIN_MENU);
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error drawing main menu\n");
-                }
-              } else {
-                /* Redraw singleplayer page */
-                uint16_t mouse_x = mouse_get_x();
-                uint16_t mouse_y = mouse_get_y();
-                if (draw_current_page(mouse_x, mouse_y) != 0) {
-                  printf("Error redrawing singleplayer page\n");
-                }
+            } else if (get_game_state() == STATE_SP_PLAYING) {
+              /* Update singleplayer game timer and redraw screen - this ensures timer updates continuously */
+              extern singleplayer_game_t sp_game; // Reference the static game instance from videocard.c
+              
+              /* Update game state regardless of user input */
+              singleplayer_update(&sp_game);
+              
+              /* Force a redraw of the screen to update timer display */
+              uint16_t mouse_x = mouse_get_x();
+              uint16_t mouse_y = mouse_get_y();
+              if (draw_current_page(mouse_x, mouse_y) != 0) {
+                printf("Error redrawing singleplayer page\n");
               }
             }
           }
@@ -259,18 +263,18 @@ int (proj_main_loop)(int argc, char* argv[])
             if (is_esc_key()) {
               game_state_t current = get_game_state();
               if (current == STATE_SP_ENTER_INITIALS || current == STATE_SP_COUNTDOWN || 
-                  current == STATE_SP_LETTER_RAIN || current == STATE_SP_SINGLEPLAYER || 
-                  current == STATE_SP_PLAYING) {
+                  current == STATE_SP_LETTER_RAIN || current == STATE_SP_PLAYING) {
                 /* In single player mode, ESC goes back to main menu */
                 printf("Exiting single player mode...\n");
                 
-                /* Cleanup based on current state */
-                jogo_t *game = get_current_game();
+                /* Cleanup letter rain if active */
                 if (current == STATE_SP_LETTER_RAIN) {
+                  jogo_t *game = get_current_game();
                   game_cleanup_letter_rain(game);
-                } else if (current == STATE_SP_SINGLEPLAYER) {
-                  game_cleanup_singleplayer(game);
                 }
+                
+                /* Reset singleplayer state so a new category is chosen next time */
+                reset_singleplayer();
                 
                 set_game_state(STATE_MAIN_MENU);
                 uint16_t mouse_x = mouse_get_x();
@@ -300,8 +304,22 @@ int (proj_main_loop)(int argc, char* argv[])
               if (kb_result == 1) {
                 /* Initials confirmed, start countdown */
                 jogo_t *game = get_current_game();
+                
+                /* Unsubscribe from keyboard IRQ before state transition */
+                printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
+                kbd_unsubscribe_int();
+                
+                /* Start countdown */
                 game_start_countdown(game);
                 set_game_state(STATE_SP_COUNTDOWN);
+                
+                /* Resubscribe to keyboard IRQ */
+                printf("Resubscribing keyboard IRQ...\n");
+                if (kbd_subscribe_int(&kbd_bit_no) != 0) {
+                  printf("Failed to resubscribe keyboard IRQ\n");
+                }
+                
+                /* Draw the countdown page */
                 uint16_t mouse_x = mouse_get_x();
                 uint16_t mouse_y = mouse_get_y();
                 if (draw_current_page(mouse_x, mouse_y) != 0) {
@@ -317,19 +335,96 @@ int (proj_main_loop)(int argc, char* argv[])
               }
             }
             
+            /* Handle Enter key press during countdown to skip to letter rain */
+            if (get_game_state() == STATE_SP_COUNTDOWN && last_scancode == 0x1C) { /* 0x1C is ENTER_MAKE */
+              printf("Enter pressed, skipping countdown...\n");
+              
+              /* Unsubscribe from keyboard IRQ before state transition */
+              printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
+              kbd_unsubscribe_int();
+              
+              jogo_t *game = get_current_game();
+              
+              /* Skip directly to letter rain */
+              int lr_init_result = game_start_letter_rain(game);
+              if (lr_init_result != 0) {
+                printf("Error starting letter rain mini-game (code: %d)\n", lr_init_result);
+                game->state = GAME_STATE_LETTER_RAIN;
+              }
+              
+              set_game_state(STATE_SP_LETTER_RAIN);
+              
+              /* Resubscribe to keyboard IRQ */
+              printf("Resubscribing keyboard IRQ...\n");
+              if (kbd_subscribe_int(&kbd_bit_no) != 0) {
+                printf("Failed to resubscribe keyboard IRQ\n");
+              }
+              
+              /* Force redraw of page */
+              uint16_t mouse_x = mouse_get_x();
+              uint16_t mouse_y = mouse_get_y();
+              if (draw_current_page(mouse_x, mouse_y) != 0) {
+                printf("Error drawing letter rain page\n");
+              }
+            }
+            
             /* Handle keyboard input for letter rain */
             if (get_game_state() == STATE_SP_LETTER_RAIN) {
               jogo_t *game = get_current_game();
+              
+              /* Check if Enter key was pressed to skip letter rain */
+              if (last_scancode == 0x1C) { /* 0x1C is ENTER_MAKE */
+                printf("Enter pressed, skipping letter rain...\n");
+                
+                /* Unsubscribe from keyboard IRQ before state transition */
+                printf("Unsubscribing keyboard IRQ to prevent conflicts...\n");
+                kbd_unsubscribe_int();
+                
+                /* Assign a default letter if none has been caught yet */
+                if (game->letra == 0) {
+                  game->letra = 'A';
+                  printf("No letter caught yet, using default letter 'A'\n");
+                }
+                
+                /* Skip directly to singleplayer game */
+                set_game_state(STATE_SP_PLAYING);
+                
+                /* Resubscribe to keyboard IRQ */
+                printf("Resubscribing keyboard IRQ...\n");
+                if (kbd_subscribe_int(&kbd_bit_no) != 0) {
+                  printf("Failed to resubscribe keyboard IRQ\n");
+                }
+                
+                /* Force redraw of page */
+                uint16_t mouse_x = mouse_get_x();
+                uint16_t mouse_y = mouse_get_y();
+                if (draw_current_page(mouse_x, mouse_y) != 0) {
+                  printf("Error drawing singleplayer page\n");
+                }
+                
+                return 0;
+              }
+              
+              /* Normal letter rain input handling */
               if (game_handle_letter_rain_input(game, last_scancode) != 0) {
                 printf("Error handling letter rain input\n");
               }
             }
             
-            /* Handle keyboard input for singleplayer */
-            if (get_game_state() == STATE_SP_SINGLEPLAYER) {
-              jogo_t *game = get_current_game();
-              if (game_handle_singleplayer_input(game, last_scancode) != 0) {
+            /* Handle keyboard input for singleplayer game */
+            if (get_game_state() == STATE_SP_PLAYING) {
+              extern singleplayer_game_t sp_game; // Reference the static game instance from videocard.c
+              
+              /* Pass keyboard input to the singleplayer game */
+              if (singleplayer_handle_input(&sp_game, last_scancode) != 0) {
                 printf("Error handling singleplayer input\n");
+              }
+              
+              /* Force a redraw of the screen */
+              uint16_t mouse_x = mouse_get_x();
+              uint16_t mouse_y = mouse_get_y();
+              if (draw_current_page(mouse_x, mouse_y) != 0) {
+                printf("Error redrawing singleplayer page\n");
               }
             }
           }
@@ -338,9 +433,9 @@ int (proj_main_loop)(int argc, char* argv[])
             /* Handle mouse interrupt only for certain states */
             game_state_t current_state = get_game_state();
             
-            /* Ignore mouse during countdown, letter rain, singleplayer and playing */
+            /* Ignore mouse during countdown, letter rain and playing */
             if (current_state == STATE_SP_COUNTDOWN || current_state == STATE_SP_LETTER_RAIN || 
-                current_state == STATE_SP_SINGLEPLAYER || current_state == STATE_SP_PLAYING) {
+                current_state == STATE_SP_PLAYING) {
               /* Just clear the mouse packet but don't process it */
               mouse_ih_custom();
               if (mouse_has_packet_ready()) {
@@ -422,6 +517,8 @@ int (proj_main_loop)(int argc, char* argv[])
           break;
       }
     }
+    
+    /* No longer need countdown logic here - moved to timer interrupt */
   }
   
   /* Unsubscribe timer interrupts */

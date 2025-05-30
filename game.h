@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "letter_rain.h"
-#include "singleplayer.h"
 
 /* Maximum length for player initials */
 #define MAX_INITIALS 4
@@ -14,7 +13,6 @@ typedef enum {
   GAME_STATE_ENTER_INITIALS,
   GAME_STATE_COUNTDOWN,
   GAME_STATE_LETTER_RAIN,
-  GAME_STATE_SINGLEPLAYER,
   GAME_STATE_PLAYING,
   GAME_STATE_FINISHED
 } single_player_state_t;
@@ -28,7 +26,6 @@ typedef struct {
   uint8_t countdown;          /* Countdown timer (3, 2, 1) */
   uint32_t timer_counter;     /* Timer counter for countdown */
   letter_rain_t letter_rain_game; /* Letter rain mini-game */
-  singleplayer_game_t singleplayer_game; 
 } jogo_t;
 
 /**
@@ -157,11 +154,5 @@ int game_handle_letter_rain_input(jogo_t *game, uint8_t scancode);
  * @param game Pointer to game structure
  */
 void game_cleanup_letter_rain(jogo_t *game);
-
-int game_start_singleplayer(jogo_t *game);
-int game_update_singleplayer(jogo_t *game);
-int game_draw_singleplayer(jogo_t *game);
-int game_handle_singleplayer_input(jogo_t *game, uint8_t scancode);
-void game_cleanup_singleplayer(jogo_t *game);
 
 #endif /* _GAME_H_ */

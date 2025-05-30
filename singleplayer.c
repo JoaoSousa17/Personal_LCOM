@@ -6,11 +6,17 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <time.h>
 
 /* Scancode definitions */
 #define ENTER_MAKE 0x1C
 #define BACKSPACE_MAKE 0x0E
 #define SPACE_MAKE 0x39
+
+/* Forward declarations for draw functions */
+int singleplayer_draw_category_intro(singleplayer_game_t *game);
+int singleplayer_draw_game_interface(singleplayer_game_t *game);
+int singleplayer_draw_results(singleplayer_game_t *game);
 
 /* Simple random number generator state */
 static uint32_t sp_rand_seed = 1;
@@ -45,15 +51,20 @@ char singleplayer_scancode_to_char(uint8_t scancode) {
 }
 
 Categoria* singleplayer_get_random_category() {
-    /* Initialize random seed with some pseudo-random value */
-    static bool seeded = false;
-    if (!seeded) {
-        sp_simple_srand((uint32_t)&categorias + get_h_res() + get_v_res());
-        seeded = true;
+    /* Initialize random seed with a more dynamic value to ensure different categories each time */
+    static uint32_t last_time = 0;
+    uint32_t current_time = get_h_res() + get_v_res() + time(NULL);
+    
+    /* Only seed if time has changed or first call */
+    if (current_time != last_time) {
+        last_time = current_time;
+        sp_simple_srand(current_time ^ ((uint32_t)&categorias * 13) ^ 0xABCDEF);
+        printf("Random seed initialized with %u\n", (unsigned)current_time);
     }
     
     /* Select random category */
     int category_index = sp_simple_rand() % TOTAL_CATEGORIAS;
+    printf("Selected category index: %d\n", category_index);
     return &categorias[category_index];
 }
 
@@ -155,12 +166,6 @@ int singleplayer_draw(singleplayer_game_t *game) {
     
     /* Define colors */
     uint32_t bg_color = 0x1a1a2e;      /* Dark blue background */
-    uint32_t orange = 0xff6b35;        /* Orange for title */
-    uint32_t white = 0xffffff;         /* White for text */
-    uint32_t yellow = 0xffd700;        /* Yellow for highlights */
-    uint32_t green = 0x00ff88;         /* Green for positive */
-    uint32_t red = 0xff4444;           /* Red for warnings */
-    uint32_t light_blue = 0x16537e;    /* Light blue for accent */
     
     /* Clear screen */
     if (clear_screen(bg_color) != 0) return 1;
@@ -265,28 +270,36 @@ int singleplayer_draw_category_intro(singleplayer_game_t *game) {
 }
 
 int singleplayer_draw_game_interface(singleplayer_game_t *game) {
-    uint32_t orange = 0xff6b35;
     uint32_t white = 0xffffff;
     uint32_t yellow = 0xffd700;
     uint32_t green = 0x00ff88;
     uint32_t red = 0xff4444;
     uint32_t light_blue = 0x16537e;
     
-    /* Draw category and timer bar */
-    char header[100];
-    sprintf(header, "%s | Tempo: %02d:%02d | Pontos: %d", 
-            game->current_category->nome, 
+    /* Draw category title centered on first line */
+    uint16_t title_y = 50;
+    uint16_t category_width = strlen(game->current_category->nome) * 8 * 2;
+    uint16_t category_x = (get_h_res() - category_width) / 2;
+    if (draw_string_scaled(category_x, title_y, game->current_category->nome, yellow, 2) != 0) return 1;
+    
+    /* Draw time and points on second line */
+    char timer_info[50];
+    sprintf(timer_info, "Tempo: %02d:%02d | Pontos: %d", 
             game->remaining_seconds / 60, 
             game->remaining_seconds % 60,
             game->total_score);
     
-    if (draw_string_scaled(20, 20, header, white, 2) != 0) return 1;
+    uint16_t timer_info_width = strlen(timer_info) * 8 * 2;
+    uint16_t timer_info_x = (get_h_res() - timer_info_width) / 2;
+    uint16_t timer_info_y = title_y + 40; /* 40px below the title */
     
-    /* Draw timer bar */
+    if (draw_string_scaled(timer_info_x, timer_info_y, timer_info, white, 2) != 0) return 1;
+    
+    /* Draw timer bar below time info */
     uint16_t timer_bar_width = 300;
-    uint16_t timer_bar_height = 10;
-    uint16_t timer_bar_x = get_h_res() - timer_bar_width - 20;
-    uint16_t timer_bar_y = 25;
+    uint16_t timer_bar_height = 15;
+    uint16_t timer_bar_x = (get_h_res() - timer_bar_width) / 2;
+    uint16_t timer_bar_y = timer_info_y + 30; /* 30px below time info */
     
     /* Timer bar background */
     if (draw_filled_rectangle(timer_bar_x, timer_bar_y, timer_bar_width, timer_bar_height, 0x333333) != 0) return 1;
@@ -298,10 +311,10 @@ int singleplayer_draw_game_interface(singleplayer_game_t *game) {
         if (draw_filled_rectangle(timer_bar_x, timer_bar_y, fill_width, timer_bar_height, timer_color) != 0) return 1;
     }
     
-    /* Draw input field */
-    uint16_t input_field_x = 50;
-    uint16_t input_field_y = 80;
+    /* Draw input field below timer bar */
     uint16_t input_field_width = 400;
+    uint16_t input_field_x = (get_h_res() - input_field_width) / 2; /* Center horizontally */
+    uint16_t input_field_y = timer_bar_y + 40; /* 40px below timer bar */
     uint16_t input_field_height = 50;
     
     /* Input field background */
@@ -323,10 +336,12 @@ int singleplayer_draw_game_interface(singleplayer_game_t *game) {
     
     /* Draw instruction */
     const char *input_instr = "Digite uma palavra e prima ENTER";
-    if (draw_string_scaled(input_field_x, input_field_y + input_field_height + 10, input_instr, white, 1) != 0) return 1;
+    uint16_t instr_width = strlen(input_instr) * 8; /* Width of text at scale 1 */
+    uint16_t instr_x = (get_h_res() - instr_width) / 2; /* Center horizontally */
+    if (draw_string_scaled(instr_x, input_field_y + input_field_height + 10, input_instr, white, 1) != 0) return 1;
     
-    /* Draw answered words */
-    uint16_t words_start_y = 180;
+    /* Draw answered words heading */
+    uint16_t words_start_y = input_field_y + input_field_height + 40; /* 40px below input field instructions */
     if (draw_string_scaled(50, words_start_y, "Palavras encontradas:", yellow, 2) != 0) return 1;
     
     /* Show answered words in columns */
@@ -349,9 +364,17 @@ int singleplayer_draw_game_interface(singleplayer_game_t *game) {
                 break;
             }
         }
-        sprintf(word_with_score, "%s (+%d)", game->answered_words[i], word_score);
         
-        if (draw_string_scaled(word_x, draw_y, word_with_score, green, 1) != 0) return 1;
+        /* Format display text based on if word contains the caught letter */
+        if (game->word_contains_letter[i]) {
+            sprintf(word_with_score, "%s (+%d)", game->answered_words[i], word_score);
+            /* Normal words in green */
+            if (draw_string_scaled(word_x, draw_y, word_with_score, green, 1) != 0) return 1;
+        } else {
+            sprintf(word_with_score, "%s (+0)", game->answered_words[i]);
+            /* Words without the caught letter in red */
+            if (draw_string_scaled(word_x, draw_y, word_with_score, red, 1) != 0) return 1;
+        }
     }
     
     /* Draw progress */
@@ -363,7 +386,6 @@ int singleplayer_draw_game_interface(singleplayer_game_t *game) {
 }
 
 int singleplayer_draw_results(singleplayer_game_t *game) {
-    uint32_t orange = 0xff6b35;
     uint32_t white = 0xffffff;
     uint32_t yellow = 0xffd700;
     uint32_t green = 0x00ff88;
@@ -494,9 +516,30 @@ int singleplayer_submit_word(singleplayer_game_t *game) {
         return 0; /* Empty input */
     }
     
+    /* Check if the word is in the dictionary of the theme */
     int score = singleplayer_check_word(game, game->current_input);
     
     if (score > 0) {
+        /* Check if the word contains the caught letter */
+        char caught_letter = tolower((unsigned char)game->caught_letter);
+        bool contains_letter = false;
+        
+        /* Convert input to lowercase for comparison */
+        char input_lower[MAX_INPUT_LENGTH];
+        strncpy(input_lower, game->current_input, MAX_INPUT_LENGTH - 1);
+        input_lower[MAX_INPUT_LENGTH - 1] = '\0';
+        
+        /* Convert to lowercase */
+        for (int j = 0; input_lower[j]; j++) {
+            input_lower[j] = tolower((unsigned char)input_lower[j]);
+            
+            /* Check if this character matches the caught letter */
+            if (input_lower[j] == caught_letter) {
+                contains_letter = true;
+                break;
+            }
+        }
+        
         /* Find the correct word in the category to add to answered list */
         /* We need to find which word in the category matches our input */
         for (int i = 0; i < game->current_category->totalPontuacoes; i++) {
@@ -505,18 +548,12 @@ int singleplayer_submit_word(singleplayer_game_t *game) {
             categoria_word[MAX_TAMANHO_PALAVRA - 1] = '\0';
             
             /* Convert both to lowercase for comparison */
-            char input_lower[MAX_INPUT_LENGTH];
             char cat_lower[MAX_TAMANHO_PALAVRA];
             
-            strncpy(input_lower, game->current_input, MAX_INPUT_LENGTH - 1);
-            input_lower[MAX_INPUT_LENGTH - 1] = '\0';
             strncpy(cat_lower, categoria_word, MAX_TAMANHO_PALAVRA - 1);
             cat_lower[MAX_TAMANHO_PALAVRA - 1] = '\0';
             
             /* Convert to lowercase */
-            for (int j = 0; input_lower[j]; j++) {
-                input_lower[j] = tolower((unsigned char)input_lower[j]);
-            }
             for (int j = 0; cat_lower[j]; j++) {
                 cat_lower[j] = tolower((unsigned char)cat_lower[j]);
             }
@@ -530,11 +567,21 @@ int singleplayer_submit_word(singleplayer_game_t *game) {
                 /* Add the original word from category to answered list */
                 strncpy(game->answered_words[game->answered_count], categoria_word, MAX_TAMANHO_PALAVRA - 1);
                 game->answered_words[game->answered_count][MAX_TAMANHO_PALAVRA - 1] = '\0';
-                game->answered_count++;
-                game->total_score += score;
                 
-                printf("Word '%s' accepted as '%s', score: %d, total: %d\n", 
-                       game->current_input, categoria_word, score, game->total_score);
+                /* Store whether the word contains the caught letter */
+                game->word_contains_letter[game->answered_count] = contains_letter;
+                
+                /* Only add points if the word contains the caught letter */
+                if (contains_letter) {
+                    game->total_score += score;
+                    printf("Word '%s' accepted as '%s', score: %d, total: %d\n", 
+                          game->current_input, categoria_word, score, game->total_score);
+                } else {
+                    printf("Word '%s' accepted as '%s', but +0 points (missing letter '%c')\n", 
+                          game->current_input, categoria_word, game->caught_letter);
+                }
+                
+                game->answered_count++;
                 break;
             }
         }
@@ -560,13 +607,13 @@ int singleplayer_check_word(singleplayer_game_t *game, const char *word) {
     }
     
     /* Create a temporary copy of answered words for verification */
-    char temp_answered[MAX_ANSWERED_WORDS][MAX_TAMANHO_PALAVRA];
+    char temp_answered[MAX_ANSWERED_WORDS][MAX_ENTRADA];
     int temp_count = game->answered_count;
     
     /* Copy current answered words to temp array */
     for (int i = 0; i < game->answered_count; i++) {
-        strncpy(temp_answered[i], game->answered_words[i], MAX_TAMANHO_PALAVRA - 1);
-        temp_answered[i][MAX_TAMANHO_PALAVRA - 1] = '\0';
+        strncpy(temp_answered[i], game->answered_words[i], MAX_ENTRADA - 1);
+        temp_answered[i][MAX_ENTRADA - 1] = '\0';
     }
     
     /* Use the game logic from gameLogic.c to verify the word */
@@ -613,7 +660,3 @@ void singleplayer_cleanup(singleplayer_game_t *game) {
     printf("SinglePlayer game cleaned up\n");
 }
 
-/* Forward declarations for draw functions */
-int singleplayer_draw_category_intro(singleplayer_game_t *game);
-int singleplayer_draw_game_interface(singleplayer_game_t *game);
-int singleplayer_draw_results(singleplayer_game_t *game);

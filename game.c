@@ -2,7 +2,6 @@
 #include "videocard.h"
 #include "font.h"
 #include "letter_rain.h"
-#include "singleplayer.h"
 #include <string.h>
 #include <ctype.h>
 
@@ -446,28 +445,12 @@ int game_update_letter_rain(jogo_t *game) {
   if (result == 1) {
     /* Letter rain game finished */
     if (game->letter_rain_game.caught_letter != 0) {
-      /* A letter was caught - transition to singleplayer IMMEDIATELY */
+      /* A letter was caught */
       game->letra = game->letter_rain_game.caught_letter;
-      
-      printf("Letter caught: %c, transitioning to singleplayer...\n", game->letra);
-      
-      // Cleanup letter rain FIRST
-      game_cleanup_letter_rain(game);
-      
-      // Initialize singleplayer game directly
-      if (singleplayer_init(&game->singleplayer_game, game->nome, game->letra) == 0) {
-        game->state = GAME_STATE_SINGLEPLAYER;  // Set internal state
-        printf("Singleplayer initialized and state set to SINGLEPLAYER\n");
-        return 1; /* Signal transition complete */
-      } else {
-        printf("Error initializing singleplayer, going to finished state\n");
-        game->state = GAME_STATE_FINISHED;
-        return 1;
-      }
+      game->state = GAME_STATE_PLAYING;
+      return 1; /* Transition to main game */
     } else {
-      /* Game over (no letter caught) */
-      printf("No letter caught, game over\n");
-      game_cleanup_letter_rain(game);
+      /* Game over (too many misses) */
       game->state = GAME_STATE_FINISHED;
       return 1;
     }
@@ -507,65 +490,4 @@ void game_cleanup_letter_rain(jogo_t *game) {
   
   /* Cleanup letter rain resources */
   letter_rain_cleanup(&game->letter_rain_game);
-}
-
-int game_start_singleplayer(jogo_t *game) {
-  if (game == NULL) {
-    return 1;
-  }
-  
-  printf("Starting singleplayer game with initials=%s, letter=%c\n", 
-         game->nome, game->letra);
-  
-  // Initialize singleplayer game
-  if (singleplayer_init(&game->singleplayer_game, game->nome, game->letra) != 0) {
-    printf("Failed to initialize singleplayer game\n");
-    return 1;
-  }
-  
-  game->state = GAME_STATE_SINGLEPLAYER;
-  printf("Game state set to SINGLEPLAYER\n");
-  return 0;
-}
-
-int game_update_singleplayer(jogo_t *game) {
-  if (game == NULL || game->state != GAME_STATE_SINGLEPLAYER)
-    return 1;
-  
-  /* Update singleplayer game */
-  int result = singleplayer_update(&game->singleplayer_game);
-  
-  if (result == 1) {
-    /* Singleplayer game finished */
-    game->pontuacao = game->singleplayer_game.total_score;
-    game->state = GAME_STATE_FINISHED;
-    printf("Singleplayer finished with score: %d\n", game->pontuacao);
-    return 1; /* Game finished */
-  }
-  
-  return 0; /* Continue singleplayer */
-}
-
-int game_draw_singleplayer(jogo_t *game) {
-  if (game == NULL || game->state != GAME_STATE_SINGLEPLAYER)
-    return 1;
-  
-  /* Draw singleplayer game */
-  return singleplayer_draw(&game->singleplayer_game);
-}
-
-int game_handle_singleplayer_input(jogo_t *game, uint8_t scancode) {
-  if (game == NULL || game->state != GAME_STATE_SINGLEPLAYER)
-    return 1;
-  
-  /* Pass input to singleplayer handler */
-  return singleplayer_handle_input(&game->singleplayer_game, scancode);
-}
-
-void game_cleanup_singleplayer(jogo_t *game) {
-  if (game == NULL)
-    return;
-  
-  /* Cleanup singleplayer resources */
-  singleplayer_cleanup(&game->singleplayer_game);
 }

@@ -3,6 +3,8 @@
 #include "leaderboard.h"
 #include "letter_rain.h"
 #include "game.h"
+#include "singleplayer.h"
+#include "keyboard.h"
 #include <machine/int86.h>
 #include <lcom/vbe.h>
 #include <string.h>
@@ -19,6 +21,10 @@ static uint8_t red_field_position, green_field_position, blue_field_position;
 
 /* Game state management */
 static game_state_t current_state = STATE_MAIN_MENU;
+
+/* Singleplayer game instance */
+static bool sp_initialized = false;
+singleplayer_game_t sp_game;
 
 int map_vram(uint16_t mode) {
   struct minix_mem_range mr;
@@ -106,6 +112,13 @@ int exit_graphics_mode() {
     video_mem = NULL;
   }
 
+  /* Unsubscribe keyboard interrupts */
+  if (kbd_unsubscribe_int() != 0) {
+    printf("Error unsubscribing keyboard interrupts\n");
+  }
+  
+  printf("Graphics mode exited successfully\n");
+  
   return 0;
 }
 
@@ -520,13 +533,23 @@ int draw_current_page(uint16_t mouse_x, uint16_t mouse_y) {
     case STATE_SP_ENTER_INITIALS:
       return draw_enter_initials_page(mouse_x, mouse_y);
     case STATE_SP_COUNTDOWN:
-      return draw_countdown_page();
+      return draw_countdown_page(); /* No mouse support */
     case STATE_SP_LETTER_RAIN:
-      return game_draw_letter_rain(get_current_game());
-    case STATE_SP_SINGLEPLAYER:
-      return game_draw_singleplayer(get_current_game());
+      return game_draw_letter_rain(get_current_game()); /* No mouse support */
     case STATE_SP_PLAYING:
-      return draw_countdown_page(); /* Will be replaced */
+      /* Initialize and use singleplayer game */
+      if (!sp_initialized) {
+        /* Get player info from letter_rain phase */
+        jogo_t *game = get_current_game();
+        singleplayer_init(&sp_game, game->nome, game->letra);
+        sp_initialized = true;
+        printf("Singleplayer game initialized with player=%s, letter=%c\n", 
+               game->nome, game->letra);
+      }
+      
+      /* Update and draw singleplayer game */
+      singleplayer_update(&sp_game);
+      return singleplayer_draw(&sp_game);
     default:
       return draw_main_page_with_hover(mouse_x, mouse_y);
   }
@@ -578,24 +601,29 @@ int draw_instructions() {
   uint16_t text_x = border_x + 20;
   
   /* Rule 1 */
-  if (draw_string_scaled(text_x, start_y, "1. O jogo escolhe uma categoria aleatoria", white, 1) != 0) return 1;
-  if (draw_string_scaled(text_x + 20, start_y + 15, "(Exemplo: Animais, Paises, Profissoes...)", yellow, 1) != 0) return 1;
-  
-  /* Rule 2 */
+  if (draw_string_scaled(text_x, start_y, "1. Vai chover letras! Apanha duas letras iguais para escolher", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 15, "a letra com que vais jogar!", white, 1) != 0) return 1;
+
   start_y += line_spacing + 25;
-  if (draw_string_scaled(text_x, start_y, "2. Tens 35 segundos para escrever palavras", white, 1) != 0) return 1;
-  if (draw_string_scaled(text_x + 20, start_y + 15, "dessa categoria", white, 1) != 0) return 1;
+  /* Rule 2 */
+  if (draw_string_scaled(text_x, start_y, "2. O jogo escolhe uma categoria aleatoria", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 15, "(Exemplo: Animais, Paises, Profissoes...)", yellow, 1) != 0) return 1;
   
   /* Rule 3 */
   start_y += line_spacing + 25;
-  if (draw_string_scaled(text_x, start_y, "3. Pontuacao por palavra:", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x, start_y, "3. Tens 35 segundos para escrever palavras dessa categoria,", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x + 20, start_y + 15, "usando a letra conquistada", white, 1) != 0) return 1;
+  
+  /* Rule 4 */
+  start_y += line_spacing + 25;
+  if (draw_string_scaled(text_x, start_y, "4. Pontuacao por palavra:", white, 1) != 0) return 1;
   if (draw_string_scaled(text_x + 20, start_y + 15, "- Palavras curtas (3-5 letras): 1 ponto", green, 1) != 0) return 1;
   if (draw_string_scaled(text_x + 20, start_y + 28, "- Palavras medias (6-8 letras): 2 pontos", green, 1) != 0) return 1;
   if (draw_string_scaled(text_x + 20, start_y + 41, "- Palavras longas (9+ letras): 3 pontos", green, 1) != 0) return 1;
   
-  /* Rule 4 */
+  /* Rule 5 */
   start_y += line_spacing + 55;
-  if (draw_string_scaled(text_x, start_y, "4. O jogo termina quando:", white, 1) != 0) return 1;
+  if (draw_string_scaled(text_x, start_y, "5. O jogo termina quando:", white, 1) != 0) return 1;
   if (draw_string_scaled(text_x + 20, start_y + 15, "- Acertas todas as palavras possiveis", yellow, 1) != 0) return 1;
   if (draw_string_scaled(text_x + 20, start_y + 28, "- OU quando o tempo acaba", yellow, 1) != 0) return 1;
   
@@ -727,4 +755,10 @@ int draw_init_mp_game() {
   if (draw_string_scaled(100, 400, "Press ESC to go back", white, 1) != 0) return 1;
   
   return 0;
+}
+
+/* Reset the singleplayer game state when returning to main menu */
+void reset_singleplayer() {
+  sp_initialized = false;
+  printf("Singleplayer game state reset for new game\n");
 }

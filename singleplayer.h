@@ -8,7 +8,7 @@
 #define MAX_INPUT_LENGTH 30
 #define MAX_ANSWERED_WORDS 50
 #define GAME_TIME_SECONDS 35
-#define TIMER_FREQUENCY 60  /* 60 Hz timer */
+#define TIMER_FREQUENCY 120  /* Adjusted timer frequency to match actual system frequency */
 
 /* Single Player Game States */
 typedef enum {
@@ -34,6 +34,7 @@ typedef struct {
     
     /* Game Progress */
     char answered_words[MAX_ANSWERED_WORDS][MAX_TAMANHO_PALAVRA];
+    bool word_contains_letter[MAX_ANSWERED_WORDS]; /* Track words containing the caught letter */
     int answered_count;
     int total_score;
     

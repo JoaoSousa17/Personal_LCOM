@@ -15,7 +15,6 @@ typedef enum {
   STATE_SP_ENTER_INITIALS,
   STATE_SP_COUNTDOWN,
   STATE_SP_LETTER_RAIN,
-  STATE_SP_SINGLEPLAYER,
   STATE_SP_PLAYING
 } game_state_t;
 
@@ -186,6 +185,12 @@ int draw_init_sp_game();
  * @return 0 on success, non-zero otherwise
  */
 int draw_init_mp_game();
+
+/**
+ * @brief Reset the singleplayer game state
+ * Call this when returning to main menu to ensure a new random category is chosen for the next game
+ */
+void reset_singleplayer();
 
 /**
  * @brief Draw mouse cursor at specified position

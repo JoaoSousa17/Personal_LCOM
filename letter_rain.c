@@ -10,42 +10,16 @@
 #define A_MAKE 0x1E
 #define D_MAKE 0x20
 
-/* Letter frequency table (cumulative probabilities) */
-static const uint16_t letter_freq_table[26] = {
-    1463,  // A: 0-1462
-    1567,  // B: 1463-1566
-    1955,  // C: 1567-1954
-    2454,  // D: 1955-2453
-    3711,  // E: 2454-3710
-    3813,  // F: 3711-3812
-    3943,  // G: 3813-3942
-    4071,  // H: 3943-4070
-    4689,  // I: 4071-4688
-    4729,  // J: 4689-4728
-    4731,  // K: 4729-4730
-    5009,  // L: 4731-5008
-    5483,  // M: 5009-5482
-    5988,  // N: 5483-5987
-    7061,  // O: 5988-7060
-    7313,  // P: 7061-7312
-    7433,  // Q: 7313-7432
-    8086,  // R: 7433-8085
-    8867,  // S: 8086-8866
-    9301,  // T: 8867-9300
-    9764,  // U: 9301-9763
-    9931,  // V: 9764-9930
-    9932,  // W: 9931-9931
-    9953,  // X: 9932-9952
-    9954,  // Y: 9953-9953
-    10000  // Z: 9954-9999
-};
-
 /* Variável estática para seed do random */
 static uint32_t rand_seed = 1;
 
 /* Função simples de random (Linear Congruential Generator) */
 static uint32_t simple_rand() {
-    rand_seed = rand_seed * 1103515245 + 12345;
+    static uint32_t call_count = 0;
+    call_count++;
+
+    rand_seed = rand_seed * 1103515245 + 12345 + call_count;
+
     return (rand_seed / 65536) % 32768;
 }
 
@@ -55,18 +29,11 @@ static void simple_srand(uint32_t seed) {
 }
 
 /* Removido board_pattern desnecessário */
-
 char get_random_letter() {
-    uint16_t rand_val = simple_rand() % 10000;
-    
-    for (int i = 0; i < 26; i++) {
-        if (rand_val < letter_freq_table[i]) {
-            return 'A' + i;
-        }
-    }
-    
-    return 'A'; // Fallback
+    int index = simple_rand() % 26; 
+    return 'A' + index;  
 }
+
 
 /* Função simplificada para criar sprite de letra */
 Sprite *create_letter_sprite(char letter, int x, int y) {
@@ -148,12 +115,12 @@ int letter_rain_init(letter_rain_t *game) {
     game->caught_letter = 0;
     game->game_over = false;
     game->frame_counter = 0;
-    game->spawn_rate = 60; // Spawn a letter every second (60 FPS)
+    game->spawn_rate = 35; // Spawn a letter every second (35 FPS)
     
     return 0;
 }
 
-nt letter_rain_update(letter_rain_t *game) {
+int letter_rain_update(letter_rain_t *game) {
     if (game == NULL || game->game_over)
         return 1;
     
@@ -173,7 +140,7 @@ nt letter_rain_update(letter_rain_t *game) {
                 uint16_t screen_width = get_h_res();
                 if (screen_width <= 16) break; // Evitar divisão por zero
                 
-                int x = simple_rand() % (screen_width - 16);
+                int x = simple_rand() % (screen_width - 30);
                 int y = -16; // Start above screen
                 
                 game->letters[i].sprite = create_letter_sprite(game->letters[i].letter, x, y);
@@ -200,30 +167,17 @@ nt letter_rain_update(letter_rain_t *game) {
                 if (letter_index >= 0 && letter_index < 26) {
                     game->letter_counters[letter_index]++;
                     
-                    printf("Letter %c caught! Count now: %d/2\n", caught, game->letter_counters[letter_index]);
-                    
-                    // Check if we caught this letter twice - GAME WON!
+                    // Check if we caught this letter twice
                     if (game->letter_counters[letter_index] >= 2) {
                         game->caught_letter = caught;
                         game->game_over = true;
-                        
-                        printf("LETTER RAIN WON! Letter %c caught twice!\n", caught);
                         
                         // Cleanup this letter
                         destroy_sprite(game->letters[i].sprite);
                         game->letters[i].sprite = NULL;
                         game->letters[i].active = false;
                         
-                        // Cleanup all other letters immediately
-                        for (int j = 0; j < MAX_FALLING_LETTERS; j++) {
-                            if (j != i && game->letters[j].active && game->letters[j].sprite != NULL) {
-                                destroy_sprite(game->letters[j].sprite);
-                                game->letters[j].sprite = NULL;
-                                game->letters[j].active = false;
-                            }
-                        }
-                        
-                        return 1; // Game won! Return immediately
+                        return 1; // Game won!
                     }
                 }
                 
@@ -244,7 +198,7 @@ nt letter_rain_update(letter_rain_t *game) {
         }
     }
     
-    return 0; // Continue letter rain
+    return 0;
 }
 
 int letter_rain_draw(letter_rain_t *game) {

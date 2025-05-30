@@ -1,5 +1,5 @@
-#ifndef JOGO_H
-#define JOGO_H
+#ifndef GAMELOGIC_H
+#define GAMELOGIC_H
 
 #define MAX_RESPONDIDAS 100
 #define MAX_ENTRADA 100
