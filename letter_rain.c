@@ -153,7 +153,7 @@ int letter_rain_init(letter_rain_t *game) {
     return 0;
 }
 
-nt letter_rain_update(letter_rain_t *game) {
+int letter_rain_update(letter_rain_t *game) {
     if (game == NULL || game->game_over)
         return 1;
     
@@ -209,14 +209,9 @@ nt letter_rain_update(letter_rain_t *game) {
                         
                         printf("LETTER RAIN WON! Letter %c caught twice!\n", caught);
                         
-                        // Cleanup this letter
-                        destroy_sprite(game->letters[i].sprite);
-                        game->letters[i].sprite = NULL;
-                        game->letters[i].active = false;
-                        
-                        // Cleanup all other letters immediately
+                        // Cleanup ALL letters immediately
                         for (int j = 0; j < MAX_FALLING_LETTERS; j++) {
-                            if (j != i && game->letters[j].active && game->letters[j].sprite != NULL) {
+                            if (game->letters[j].active && game->letters[j].sprite != NULL) {
                                 destroy_sprite(game->letters[j].sprite);
                                 game->letters[j].sprite = NULL;
                                 game->letters[j].active = false;

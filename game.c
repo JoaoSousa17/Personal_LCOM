@@ -436,44 +436,46 @@ int game_start_letter_rain(jogo_t *game) {
   return 0;
 }
 
-int game_update_letter_rain(jogo_t *game) {
-  if (game == NULL || game->state != GAME_STATE_LETTER_RAIN)
-    return 1;
-  
-  /* Update the letter rain game */
-  int result = letter_rain_update(&game->letter_rain_game);
-  
-  if (result == 1) {
-    /* Letter rain game finished */
-    if (game->letter_rain_game.caught_letter != 0) {
-      /* A letter was caught - transition to singleplayer IMMEDIATELY */
-      game->letra = game->letter_rain_game.caught_letter;
-      
-      printf("Letter caught: %c, transitioning to singleplayer...\n", game->letra);
-      
-      // Cleanup letter rain FIRST
-      game_cleanup_letter_rain(game);
-      
-      // Initialize singleplayer game directly
-      if (singleplayer_init(&game->singleplayer_game, game->nome, game->letra) == 0) {
-        game->state = GAME_STATE_SINGLEPLAYER;  // Set internal state
-        printf("Singleplayer initialized and state set to SINGLEPLAYER\n");
-        return 1; /* Signal transition complete */
-      } else {
-        printf("Error initializing singleplayer, going to finished state\n");
-        game->state = GAME_STATE_FINISHED;
+iint game_update_letter_rain(jogo_t *game) {
+    if (game == NULL || game->state != GAME_STATE_LETTER_RAIN)
         return 1;
-      }
-    } else {
-      /* Game over (no letter caught) */
-      printf("No letter caught, game over\n");
-      game_cleanup_letter_rain(game);
-      game->state = GAME_STATE_FINISHED;
-      return 1;
+    
+    /* Update the letter rain game */
+    int result = letter_rain_update(&game->letter_rain_game);
+    
+    if (result == 1) {
+        /* Letter rain game finished */
+        if (game->letter_rain_game.caught_letter != 0) {
+            /* A letter was caught - transition to singleplayer */
+            game->letra = game->letter_rain_game.caught_letter;
+            
+            printf("Letter caught: %c, starting singleplayer initialization...\n", game->letra);
+            
+            // Cleanup letter rain FIRST
+            game_cleanup_letter_rain(game);
+            
+            // Initialize singleplayer game
+            if (singleplayer_init(&game->singleplayer_game, game->nome, game->letra) == 0) {
+                // Set BOTH game states
+                game->state = GAME_STATE_SINGLEPLAYER;  // Internal game state
+                
+                printf("Singleplayer initialized successfully\n");
+                return 1; /* Signal transition complete */
+            } else {
+                printf("Error initializing singleplayer, going to finished state\n");
+                game->state = GAME_STATE_FINISHED;
+                return 1;
+            }
+        } else {
+            /* Game over (no letter caught) */
+            printf("No letter caught, game over\n");
+            game_cleanup_letter_rain(game);
+            game->state = GAME_STATE_FINISHED;
+            return 1;
+        }
     }
-  }
-  
-  return 0; /* Continue letter rain */
+    
+    return 0; /* Continue letter rain */
 }
 
 int game_draw_letter_rain(jogo_t *game) {
