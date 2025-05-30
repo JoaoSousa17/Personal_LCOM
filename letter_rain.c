@@ -153,7 +153,7 @@ int letter_rain_init(letter_rain_t *game) {
     return 0;
 }
 
-int letter_rain_update(letter_rain_t *game) {
+nt letter_rain_update(letter_rain_t *game) {
     if (game == NULL || game->game_over)
         return 1;
     
@@ -200,17 +200,30 @@ int letter_rain_update(letter_rain_t *game) {
                 if (letter_index >= 0 && letter_index < 26) {
                     game->letter_counters[letter_index]++;
                     
-                    // Check if we caught this letter twice
+                    printf("Letter %c caught! Count now: %d/2\n", caught, game->letter_counters[letter_index]);
+                    
+                    // Check if we caught this letter twice - GAME WON!
                     if (game->letter_counters[letter_index] >= 2) {
                         game->caught_letter = caught;
                         game->game_over = true;
+                        
+                        printf("LETTER RAIN WON! Letter %c caught twice!\n", caught);
                         
                         // Cleanup this letter
                         destroy_sprite(game->letters[i].sprite);
                         game->letters[i].sprite = NULL;
                         game->letters[i].active = false;
                         
-                        return 1; // Game won!
+                        // Cleanup all other letters immediately
+                        for (int j = 0; j < MAX_FALLING_LETTERS; j++) {
+                            if (j != i && game->letters[j].active && game->letters[j].sprite != NULL) {
+                                destroy_sprite(game->letters[j].sprite);
+                                game->letters[j].sprite = NULL;
+                                game->letters[j].active = false;
+                            }
+                        }
+                        
+                        return 1; // Game won! Return immediately
                     }
                 }
                 
@@ -231,7 +244,7 @@ int letter_rain_update(letter_rain_t *game) {
         }
     }
     
-    return 0;
+    return 0; // Continue letter rain
 }
 
 int letter_rain_draw(letter_rain_t *game) {

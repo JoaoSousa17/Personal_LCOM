@@ -497,13 +497,47 @@ int singleplayer_submit_word(singleplayer_game_t *game) {
     int score = singleplayer_check_word(game, game->current_input);
     
     if (score > 0) {
-        /* Add word to answered list */
-        strncpy(game->answered_words[game->answered_count], game->current_input, MAX_TAMANHO_PALAVRA - 1);
-        game->answered_words[game->answered_count][MAX_TAMANHO_PALAVRA - 1] = '\0';
-        game->answered_count++;
-        game->total_score += score;
-        
-        printf("Word '%s' accepted, score: %d, total: %d\n", game->current_input, score, game->total_score);
+        /* Find the correct word in the category to add to answered list */
+        /* We need to find which word in the category matches our input */
+        for (int i = 0; i < game->current_category->totalPontuacoes; i++) {
+            char categoria_word[MAX_TAMANHO_PALAVRA];
+            strncpy(categoria_word, game->current_category->pontuacoes[i].palavra, MAX_TAMANHO_PALAVRA - 1);
+            categoria_word[MAX_TAMANHO_PALAVRA - 1] = '\0';
+            
+            /* Convert both to lowercase for comparison */
+            char input_lower[MAX_INPUT_LENGTH];
+            char cat_lower[MAX_TAMANHO_PALAVRA];
+            
+            strncpy(input_lower, game->current_input, MAX_INPUT_LENGTH - 1);
+            input_lower[MAX_INPUT_LENGTH - 1] = '\0';
+            strncpy(cat_lower, categoria_word, MAX_TAMANHO_PALAVRA - 1);
+            cat_lower[MAX_TAMANHO_PALAVRA - 1] = '\0';
+            
+            /* Convert to lowercase */
+            for (int j = 0; input_lower[j]; j++) {
+                input_lower[j] = tolower((unsigned char)input_lower[j]);
+            }
+            for (int j = 0; cat_lower[j]; j++) {
+                cat_lower[j] = tolower((unsigned char)cat_lower[j]);
+            }
+            
+            /* Remove accents from both */
+            removerAcentos(input_lower);
+            removerAcentos(cat_lower);
+            
+            /* Check if they match (with distance <= 1) */
+            if (distanciaLevenshtein(input_lower, cat_lower) <= 1) {
+                /* Add the original word from category to answered list */
+                strncpy(game->answered_words[game->answered_count], categoria_word, MAX_TAMANHO_PALAVRA - 1);
+                game->answered_words[game->answered_count][MAX_TAMANHO_PALAVRA - 1] = '\0';
+                game->answered_count++;
+                game->total_score += score;
+                
+                printf("Word '%s' accepted as '%s', score: %d, total: %d\n", 
+                       game->current_input, categoria_word, score, game->total_score);
+                break;
+            }
+        }
     }
     
     /* Clear input */
@@ -525,8 +559,23 @@ int singleplayer_check_word(singleplayer_game_t *game, const char *word) {
         }
     }
     
+    /* Create a temporary copy of answered words for verification */
+    char temp_answered[MAX_ANSWERED_WORDS][MAX_TAMANHO_PALAVRA];
+    int temp_count = game->answered_count;
+    
+    /* Copy current answered words to temp array */
+    for (int i = 0; i < game->answered_count; i++) {
+        strncpy(temp_answered[i], game->answered_words[i], MAX_TAMANHO_PALAVRA - 1);
+        temp_answered[i][MAX_TAMANHO_PALAVRA - 1] = '\0';
+    }
+    
     /* Use the game logic from gameLogic.c to verify the word */
-    return verificarEntrada(game->current_category, game->answered_words, &game->answered_count, word);
+    int score = verificarEntrada(game->current_category, temp_answered, &temp_count, word);
+    
+    /* If the word is valid and was added to temp_answered, we know it's correct */
+    /* But we don't update game->answered_words here - that's done in submit_word */
+    
+    return score;
 }
 
 bool singleplayer_all_words_found(singleplayer_game_t *game) {

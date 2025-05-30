@@ -198,13 +198,20 @@ int (proj_main_loop)(int argc, char* argv[])
               int lr_result = game_update_letter_rain(game);
               if (lr_result == 1) {
                 /* Letter rain finished */
-                if (game->letra != 0) {
-                  printf("Letter rain finished, caught letter: %c\n", game->letra);
-                  set_game_state(STATE_SP_SINGLEPLAYER);  /* MUDANÇA: vai para singleplayer */
+                if (game->letra != 0 && game->state == GAME_STATE_SINGLEPLAYER) {
+                  printf("Letter rain finished, caught letter: %c, internal state: %d\n", 
+                        game->letra, game->state);
+                  
+                  // FORÇAR a transição para singleplayer
+                  set_game_state(STATE_SP_SINGLEPLAYER);
+                  
+                  printf("Forced transition to STATE_SP_SINGLEPLAYER\n");
                 } else {
-                  printf("Letter rain failed, game over\n");
+                  printf("Letter rain failed or error, game state: %d, letter: %c\n", 
+                        game->state, game->letra);
                   set_game_state(STATE_MAIN_MENU);
                 }
+                
                 uint16_t mouse_x = mouse_get_x();
                 uint16_t mouse_y = mouse_get_y();
                 if (draw_current_page(mouse_x, mouse_y) != 0) {
