@@ -10,6 +10,9 @@ typedef enum {
   STATE_MAIN_MENU,
   STATE_SINGLE_PLAYER,
   STATE_MULTIPLAYER,
+  STATE_MULTIPLAYER_TEST,
+  STATE_MP_WAITING_FOR_OTHER_PLAYER,
+  STATE_MP_RESULTS,
   STATE_LEADERBOARD,
   STATE_INSTRUCTIONS,
   STATE_SP_ENTER_INITIALS,
@@ -187,10 +190,42 @@ int draw_init_sp_game();
 int draw_init_mp_game();
 
 /**
- * @brief Reset the singleplayer game state
- * Call this when returning to main menu to ensure a new random category is chosen for the next game
+ * @brief Draw multiplayer connection waiting screen
+ * 
+ * @return 0 on success, non-zero otherwise
+ */
+int draw_multiplayer_test_screen();
+
+/**
+ * @brief Draw waiting for other player screen
+ * 
+ * @return 0 on success, non-zero otherwise
+ */
+int draw_mp_waiting_for_other_player();
+
+/**
+ * @brief Draw multiplayer results screen
+ * 
+ * @return 0 on success, non-zero otherwise
+ */
+int draw_mp_results_screen();
+
+/**
+ * @brief Check if currently in multiplayer mode
+ * 
+ * @return True if in multiplayer mode
+ */
+bool is_in_multiplayer_mode();
+
+/**
+ * @brief Reset singleplayer game state
  */
 void reset_singleplayer();
+
+/**
+ * @brief Reset multiplayer connection state
+ */
+void reset_multiplayer_connection();
 
 /**
  * @brief Draw mouse cursor at specified position
